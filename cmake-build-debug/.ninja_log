@@ -1,0 +1,13 @@
+# ninja log v5
+1	92	1650847834971289826	CMakeFiles/server.dir/lock.c.o	f96f1e1714f78266
+0	54	1650891437852021374	CMakeFiles/server.dir/main.c.o	33514781acd5c187
+3	23	1650893420044477534	build.ninja	8a0c60b5ae83501e
+1	53	1650891334405922362	CMakeFiles/server.dir/network.c.o	b16285b0040786e4
+1	43	1650891437842021429	CMakeFiles/server.dir/storage.c.o	fdb5d43c9f1f6fb7
+1	74	1650891179050108202	CMakeFiles/server.dir/httpInterface.c.o	b10dff914fd1904
+1	49	1650861203744596070	CMakeFiles/server.dir/command.c.o	d7dbf8b088953b58
+2	92	1650847834971289826	CMakeFiles/server.dir/systemExec.c.o	d0924c473f77881c
+1	91	1650847834967956511	CMakeFiles/server.dir/dynArray.c.o	2e5a38974336ce5
+0	121	1650847835004622976	CMakeFiles/server.dir/dynString.c.o	b4c944568e726328
+2	82	1650847834961289881	CMakeFiles/server.dir/newsletter.c.o	8e55c22cdfc8c4ca
+54	85	1650891437885354524	server	c050a7a9cde5f60c

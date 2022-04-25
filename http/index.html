@@ -1,0 +1,91 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Key-value database</title>
+    
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:300,600,400' rel='stylesheet' type='text/css' />
+    <link rel="stylesheet" href="http://code.jquery.com/ui/1.11.2/themes/cupertino/jquery-ui.css">
+
+    <script src="http://code.jquery.com/jquery-1.10.2.js"></script>
+    <script src="http://code.jquery.com/ui/1.11.2/jquery-ui.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="css/demos.css" />
+    <link rel="stylesheet" type="text/css" href="css/jsgrid.css" />
+    <link rel="stylesheet" type="text/css" href="css/theme.css" />
+
+    <script src="js/jsgrid.min.js"></script>
+
+    <style>
+        
+    </style>
+</head>
+<body>
+    <div>
+        <img src="img/database.png" style="display:inline-block; vertical-align:middle;"/>
+        <h1 style="display:inline-block; vertical-align:middle;">Key-value database</h1>
+    </div>
+    <div id="jsGrid"></div>
+
+    <script>
+        $(function() {
+            $("#jsGrid").jsGrid({
+                height: "90%",
+                width: "100%",
+                filtering: true,
+                inserting: true,
+                editing: true,
+                sorting: true,
+                paging: true,
+
+                pageSize: 50,
+
+                controller: {
+                    loadData: function(filter) {
+                        var d = $.Deferred();
+
+                        $.ajax({
+                            type: "GET",
+                            url: "/storage/" + filter["key"],
+                        }).done(function(response) {
+                            d.resolve(response["responseRecords"]);
+                        });
+
+                        return d.promise();
+                    },
+                    
+                    insertItem: function(item) {
+                        return $.ajax({
+                            type: "PUT", // POST
+                            url: "/storage/",
+                            data: item
+                        });
+                    },
+                    
+                    updateItem: function(item) {
+                        return $.ajax({
+                            type: "PUT",
+                            url: "/storage/",
+                            data: item
+                        });
+                    },
+                    
+                    deleteItem: function(item) {
+                        return $.ajax({
+                            type: "DELETE",
+                            url: "/storage/",
+                            data: item
+                        });
+                    }
+                },
+
+                fields: [
+                    { name: "key", type: "text", filtering: true, editing: false },
+                    { name: "value", type: "text", filtering: false, editing: true },
+                    { type: "control", editButton: false, modeSwitchButton: true }
+                ]
+            });
+
+        });
+    </script>
+</body>
+</html>
