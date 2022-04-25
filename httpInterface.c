@@ -150,15 +150,15 @@ void httpRequestProcess (HttpRequest *request, HttpResponse *response)
         stringCut(cmd->key,strlen(storageUrl),
                   stringLength(cmd->key));
 
-        if (stringEquals(cmd->name, "DELETE")) {
-            stringCopy(cmd->name, "DEL");
-        }
         if (!stringEquals(cmd->name, "GET") &&
                 !stringEquals(cmd->name, "PUT") &&
-                !stringEquals(cmd->name, "DEL")) {
+                !stringEquals(cmd->name, "DELETE")) {
             httpResponseSetup(response, HTTP_STATUS_METHOD_NOT_ALLOWED,
                               0, NULL, 1, "Allow: GET, PUT, DELETE");
             return;
+        }
+        if (stringEquals(cmd->name, "DELETE")) {
+            stringCut(cmd->name, 0, 3);
         }
 
         commandExecute(cmd);
