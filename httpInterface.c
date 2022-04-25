@@ -284,24 +284,19 @@ bool httpResponseCheckFilePath (HttpResponse *response, String *path)
     char *realWebfileDirectory = realpath(webfileDirectory, NULL);
     char *realPath = realpath(path->cStr, NULL);
 
-    // Pfad existiert nicht
-    if (realWebfileDirectory == NULL || realPath == NULL) {
-        if (realWebfileDirectory) free(realWebfileDirectory);
-        if (realPath) free(realPath);
+    struct stat pathStat;
+    if (realPath) stat(realPath, &pathStat);
+
+    // Pfad existiert nicht (evtl. einschliesslich Webfile-Verzeichnis).
+    if ((realWebfileDirectory == NULL || realPath == NULL) ||
+    // Pfad befindet sich ausserhalb des Webfile-Verzeichnisses (z.B. durch "..")
+        strncmp(realWebfileDirectory, realPath, strlen(realWebfileDirectory)) != 0) {
         httpResponseSetup(response, HTTP_STATUS_NOT_FOUND,
                           0, NULL, 0);
+        if (realWebfileDirectory) free(realWebfileDirectory);
+        if (realPath) free(realPath);
         return false;
     }
-
-    // Pfad befindet sich ausserhalb des Webfile-Verzeichnisses (z.B. durch "..")
-    if (strncmp(realWebfileDirectory, realPath, strlen(realWebfileDirectory)) != 0) {
-        httpResponseSetup(response, HTTP_STATUS_MOVED_PERMANENTLY,
-                          0, NULL, 1, "Location: /");
-        return false;
-    }
-
-    struct stat pathStat;
-    stat(realPath, &pathStat);
 
     // Pfad führt zu einem Verzeichnis
     if (S_ISDIR(pathStat.st_mode)) {
@@ -317,6 +312,8 @@ bool httpResponseCheckFilePath (HttpResponse *response, String *path)
                               0, NULL, 1, location->cStr);
 
             stringFree(location);
+            free(realWebfileDirectory);
+            free(realPath);
             return false;
         }
 
