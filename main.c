@@ -7,6 +7,7 @@
 #include "network.h"
 
 #include <signal.h>
+#include <sys/prctl.h>
 
 
 void initAllModules ()
@@ -48,14 +49,21 @@ void fatalError (const char *message)
 
 int main (int argc, char *argv[])
 {
+    prctl(PR_SET_NAME, (unsigned long)"kvsvr(cmd)");
+
     initAllModules();
 
+    // Verwerfe den exit-Status der Kind-Prozesse, um Zombie-Prozesse zu verhindern
+    signal(SIGCHLD, SIG_IGN);
+
     if (fork() == 0) {
+        prctl(PR_SET_NAME, (unsigned long)"kvsvr(http)");
+
         runServerLoop("HTTP", HTTP_SERVER_PORT, clientHandlerHttp);
     }
     else {
-        signal(SIGINT, freeResourcesAndExit);
-        //signal(SIGTERM, freeResourcesAndExit);
+        signal(SIGINT, freeResourcesAndExit); // Beenden mit ctrl+c
+        signal(SIGTERM, freeResourcesAndExit); // Beenden mit kill #pid
 
         runServerLoop("Command", COMMAND_SERVER_PORT, clientHandlerCommand);
     }

@@ -19,6 +19,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/prctl.h>
 
 
 #define SOCKET int

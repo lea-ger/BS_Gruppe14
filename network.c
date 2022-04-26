@@ -94,20 +94,20 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
             fatalError("accept");
         }
 
+        // Neuer Client-Handler Prozess
         if (fork() == 0) {
             signal(SIGINT, SIG_DFL);
-            //signal(SIGTERM, SIG_DFL);
+            signal(SIGTERM, SIG_DFL);
             close(listener);
 
             printf("%s-Client %d (%s) connected\n", name, getpid(), inet_ntoa(clientAddr.sin_addr));
             clientHandler(clientSocket);
-
-            shutdown(clientSocket, SHUT_RDWR);
             close(clientSocket);
             printf("%s-Client %d (%s) disconnected\n", name, getpid(), inet_ntoa(clientAddr.sin_addr));
 
             exit(EXIT_SUCCESS);
         }
+        // Server Prozess
         else {
             close(clientSocket);
         }
@@ -123,6 +123,8 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
  */
 void clientHandlerCommand (SOCKET client)
 {
+    prctl(PR_SET_NAME, (unsigned long)"kvsvr(cmd-cli)");
+
     String *buffer = stringCreateWithCapacity("", RECV_BUFFER_SIZE);
     Command *cmd = commandCreate();
 
@@ -159,6 +161,8 @@ void clientHandlerCommand (SOCKET client)
  * @param client - Client-Handler
  */
 void clientHandlerHttp (SOCKET client) {
+    prctl(PR_SET_NAME, (unsigned long)"kvsvr(http-cli)");
+
     String *buffer = stringCreateWithCapacity("", RECV_BUFFER_SIZE);
     HttpRequest *request = httpRequestCreate();
     HttpResponse *response = httpResponseCreate();
