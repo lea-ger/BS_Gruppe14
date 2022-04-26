@@ -2,7 +2,7 @@
 
 
 static const char *commandQuitName = "QUIT";
-static SOCKET listener = 0;
+static SOCKET listener = 0; // "Rendezvous-Descriptor"
 
 
 void initModulNetwork ()
@@ -24,9 +24,9 @@ void eventCommandQuit (Command *cmd)
 }
 
 
-int receiveMessage (SOCKET client, char *message)
+int receiveMessage (SOCKET socket, char *message)
 {
-    int size = recv(client, message, RECV_BUFFER_SIZE, 0);
+    int size = recv(socket, message, RECV_BUFFER_SIZE, 0);
 
     if (size == RECV_BUFFER_SIZE) {
         char termSign = message[RECV_BUFFER_SIZE-1];
@@ -56,6 +56,8 @@ int receiveMessage (SOCKET client, char *message)
 void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET socket))
 {
     struct sockaddr_in serverAddr;
+
+    // Erzeugt ein TCP/IP(v4) Socket
     listener = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listener < 0) {
         fatalError("socket");
@@ -74,10 +76,12 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
         setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int));
     }
 
+    // Bindet den Socket an eine Adresse
     if (bind(listener,(struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
         fatalError("bind");
     }
 
+    // Eingehende Verbindungen in einer Warteschlange aufnehmen
     if (listen(listener, 5) == -1) {
         fatalError("listen");
     }
@@ -89,6 +93,7 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
     SOCKET clientSocket;
 
     for (;;) {
+        // Eingehende Verbindung aus der Warteschlange akzeptieren
         clientSocket = accept(listener, (struct sockaddr*)&clientAddr, &len);
         if (clientSocket < 0) {
             fatalError("accept");
@@ -119,9 +124,9 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
  * Eintrittsfunktion für Command-Clients. Nimmt in einer Schleife Befehle entgegen,
  * verarbeitet Sie, und gibt dann die Ergebnisse zurück (persistente Verbindung).
  *
- * @param client - Socket-Handler
+ * @param socket - Verbindungs-Descriptor
  */
-void clientHandlerCommand (SOCKET client)
+void clientHandlerCommand (SOCKET socket)
 {
     prctl(PR_SET_NAME, (unsigned long)"kvsvr(cmd-cli)");
 
@@ -131,10 +136,10 @@ void clientHandlerCommand (SOCKET client)
     int size = 0;
 
     do {
-        size = receiveMessage(client, buffer->cStr);
+        size = receiveMessage(socket, buffer->cStr);
         if (size > RECV_BUFFER_SIZE) {
             const char *exceedMsg = "BUFFER_EXCEEDED\r\n";
-            send(client, exceedMsg, strlen(exceedMsg), 0);
+            send(socket, exceedMsg, strlen(exceedMsg), 0);
             continue;
         }
         else if (size <= 0) {
@@ -145,7 +150,7 @@ void clientHandlerCommand (SOCKET client)
         commandExecute(cmd);
         commandFormatResponseMessage(cmd, buffer);
 
-        send(client, buffer->cStr, stringLength(buffer), 0);
+        send(socket, buffer->cStr, stringLength(buffer), 0);
 
     } while (!stringEquals(cmd->name, commandQuitName));
 
@@ -158,23 +163,23 @@ void clientHandlerCommand (SOCKET client)
  * Eintrittsfunktion für Http-Clients. Nimmt eine einzelne Anfrage entgegen,
  * verarbeitet Sie, gibt das Ergebnis zurück und beendet den Prozess.
  *
- * @param client - Client-Handler
+ * @param socket - Verbindungs-Descriptor
  */
-void clientHandlerHttp (SOCKET client) {
+void clientHandlerHttp (SOCKET socket) {
     prctl(PR_SET_NAME, (unsigned long)"kvsvr(http-cli)");
 
     String *buffer = stringCreateWithCapacity("", RECV_BUFFER_SIZE);
     HttpRequest *request = httpRequestCreate();
     HttpResponse *response = httpResponseCreate();
 
-    int size = receiveMessage(client, buffer->cStr);
+    int size = receiveMessage(socket, buffer->cStr);
     if (size > RECV_BUFFER_SIZE) {
         httpResponseSetup(response, HTTP_STATUS_INTERNAL_SERVER_ERROR,
                           0, NULL, 0);
         httpResponseFormateMessage(response, buffer);
 
         // (Missbrauch von String.capacity)
-        send(client, buffer->cStr, buffer->capacity, 0);
+        send(socket, buffer->cStr, buffer->capacity, 0);
     }
     else if (size > 0) {
         httpRequestParseMessage(request, buffer);
@@ -183,7 +188,7 @@ void clientHandlerHttp (SOCKET client) {
         httpResponseFormateMessage(response, buffer);
 
         // (Missbrauch von String.capacity)
-        send(client, buffer->cStr, buffer->capacity, 0);
+        send(socket, buffer->cStr, buffer->capacity, 0);
     }
 
     httpResponseFree(response);

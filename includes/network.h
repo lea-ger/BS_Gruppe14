@@ -38,7 +38,7 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
 void clientHandlerCommand (SOCKET socket);
 void clientHandlerHttp (SOCKET socket);
 
-int receiveMessage (SOCKET client, char* message);
+int receiveMessage (SOCKET socket, char* message);
 
 
 #endif //SERVER_NETWORK_H
