@@ -1,3 +1,0 @@
-/tmp/PrakBS22/cmake-build-docker/CMakeFiles/rebuild_cache.dir
-/tmp/PrakBS22/cmake-build-docker/CMakeFiles/PrakBS22.dir
-/tmp/PrakBS22/cmake-build-docker/CMakeFiles/edit_cache.dir

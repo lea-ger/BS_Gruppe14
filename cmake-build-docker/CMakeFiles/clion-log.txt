@@ -1,4 +1,0 @@
-/usr/bin/cmake -G "CodeBlocks - Unix Makefiles" /tmp/PrakBS22
--- Configuring done
--- Generating done
--- Build files have been written to: /tmp/PrakBS22/cmake-build-docker

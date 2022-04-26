@@ -1,1 +1,0 @@
-/usr/bin/cc    CMakeFiles/PrakBS22.dir/main.c.o CMakeFiles/PrakBS22.dir/keyValStore.c.o CMakeFiles/PrakBS22.dir/sub.c.o  -o PrakBS22 
