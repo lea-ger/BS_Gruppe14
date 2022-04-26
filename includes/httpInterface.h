@@ -46,12 +46,9 @@ typedef struct {
 
 HttpRequest* httpRequestCreate ();
 void httpRequestFree (HttpRequest *request);
+
 HttpResponse* httpResponseCreate ();
 void httpResponseFree (HttpResponse *response);
-
-void httpResponseSetup (HttpResponse *response, int statusCode,
-                        size_t payloadSize, const char *payload, int additionalAttributes, ...);
-void httpResponseAttributesFree (HttpResponse *response);
 
 void httpRequestParseMessage (HttpRequest *request, String *requestMessage);
 void httpRequestProcess (HttpRequest *request, HttpResponse *response);
@@ -60,6 +57,9 @@ void httpResponseFormateMessage (HttpResponse *response, String *responseMessage
 void httpResponseLoadWebfile (HttpResponse *response, const char *url);
 bool httpResponseCheckFilePath (HttpResponse *response, String *path);
 void commandToJson (Command *cmd, String *json);
+
+void httpResponseAttributeAdd (HttpResponse *response, const char* attribute);
+void httpResponseAttributesFree (HttpResponse *response);
 
 const char* getHttpStatusName (int status);
 const char* getMimeType (const char* fileSuffix);

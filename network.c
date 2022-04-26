@@ -174,8 +174,7 @@ void clientHandlerHttp (SOCKET socket) {
 
     int size = receiveMessage(socket, buffer->cStr);
     if (size > RECV_BUFFER_SIZE) {
-        httpResponseSetup(response, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-                          0, NULL, 0);
+        response->statusCode = HTTP_STATUS_INTERNAL_SERVER_ERROR;
         httpResponseFormateMessage(response, buffer);
 
         // (Missbrauch von String.capacity)

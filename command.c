@@ -277,7 +277,7 @@ void commandFormatResponseMessage (const Command *cmd, String *responseMessage)
 
 
 /**
- * Fügt einen Datensatz als Antwort einem Befehlsobjekt hinzu.
+ * Fügt einem Befehlsobjekt einen Antwort-Datensatz hinzu.
  *
  * @param records - Antwort-Datensätze
  * @param key - Schlüssel
@@ -294,7 +294,8 @@ void responseRecordsAdd (Array* records, const char* key, const char* value)
 
 
 /**
- * Entfernt alle Datensätze aus einem Befehlsobjekt.
+ * Gibt den Heap-Speicher aller Datensätze (ResponseRecord Objekte) in dem
+ * Befehlsobjekt frei.
  *
  * @param records - Antwort-Datensätze
  */

@@ -43,6 +43,9 @@ HttpResponse* httpResponseCreate ()
     response->payload = stringCreate("");
     response->attributes = arrayCreate();
 
+    response->statusCode = 0;
+    response->payloadSize = 0;
+
     return response;
 }
 
@@ -60,52 +63,6 @@ void httpResponseFree (HttpResponse *response)
     stringFree(response->payload);
 
     free(response);
-}
-
-
-/**
- * Setzt die Attribute eines Http-Response-Objekts.
- *
- * @param response - Zielobjekt
- * @param statusCode - HTTP Status
- * @param payloadSize - Größe des Anhangs
- * @param payload - Datenanhang
- * @param additionalAttributes - Anzahl der zusätzlichen HTTP Attribute
- * @param ... - HTTP Attribute
- */
-void httpResponseSetup (HttpResponse *response, int statusCode,
-                        size_t payloadSize, const char *payload, int additionalAttributes, ...)
-{
-    response->statusCode = statusCode;
-    response->payloadSize = payloadSize;
-
-    if (payload != NULL) {
-        stringReserve(response->payload, payloadSize);
-        memcpy(response->payload->cStr, payload, payloadSize);
-    }
-
-    va_list vaList;
-    va_start(vaList, additionalAttributes);
-    for (int i = 0; i < additionalAttributes; i++) {
-        char *attribut = va_arg(vaList, char*);
-        arrayPushItem(response->attributes, stringCreate(attribut));
-    }
-    va_end(vaList);
-}
-
-
-/**
- * Gibt den Heap-Speicher aller zusätzlicher Attribute (String Objekte) frei.
- *
- * @param response - Zielobjekt
- */
-void httpResponseAttributesFree (HttpResponse *response)
-{
-    for (int i = 0; i < response->attributes->size; i++) {
-        String *att = response->attributes->cArr[i];
-        stringFree(att);
-    }
-    arrayClear(response->attributes);
 }
 
 
@@ -141,41 +98,42 @@ void httpRequestProcess (HttpRequest *request, HttpResponse *response)
     // Zugriff auf die Datenbank
     // -------------------------
     if (strncmp(request->url->cStr, storageUrl, strlen(storageUrl)) == 0) {
+        if (!stringEquals(request->method, "GET") &&
+            !stringEquals(request->method, "PUT") &&
+            !stringEquals(request->method, "DELETE")) {
+            response->statusCode = HTTP_STATUS_METHOD_NOT_ALLOWED;
+            httpResponseAttributeAdd(response, "Allow: GET, PUT, DELETE");
+            return;
+        }
+
         Command *cmd = commandCreate();
 
         stringCopy(cmd->name, request->method->cStr);
         stringCopy(cmd->key, request->url->cStr);
         stringCopy(cmd->value, request->payload->cStr);
 
-        stringCut(cmd->key,strlen(storageUrl),
-                  stringLength(cmd->key));
-
-        if (!stringEquals(cmd->name, "GET") &&
-                !stringEquals(cmd->name, "PUT") &&
-                !stringEquals(cmd->name, "DELETE")) {
-            httpResponseSetup(response, HTTP_STATUS_METHOD_NOT_ALLOWED,
-                              0, NULL, 1, "Allow: GET, PUT, DELETE");
-            return;
-        }
+        // "DELETE" -> "DEL"
         if (stringEquals(cmd->name, "DELETE")) {
             stringCut(cmd->name, 0, 3);
         }
+        // "/storage/key" -> "key"
+        stringCut(cmd->key,strlen(storageUrl),
+                  stringLength(cmd->key));
 
         commandExecute(cmd);
         commandToJson(cmd, response->payload);
 
         commandFree(cmd);
 
-        httpResponseSetup(response, HTTP_STATUS_OK,
-                          stringLength(response->payload), NULL,
-                          1, "Content-Type: application/json");
+        response->statusCode = HTTP_STATUS_OK;
+        httpResponseAttributeAdd(response, "Content-Type: application/json");
         return;
     }
     // Zugriff auf das Webfile-Verzeichnis
     // -----------------------------------
     if (!stringEquals(request->method, "GET")) {
-        httpResponseSetup(response, HTTP_STATUS_METHOD_NOT_ALLOWED,
-                          0, NULL, 1, "Allow: GET");
+        response->statusCode = HTTP_STATUS_METHOD_NOT_ALLOWED;
+        httpResponseAttributeAdd(response, "Allow: GET");
         return;
     }
 
@@ -241,8 +199,7 @@ void httpResponseLoadWebfile (HttpResponse *response, const char *url)
 
     FILE *file = fopen(path->cStr, "rb");
     if (file == NULL) {
-        httpResponseSetup(response, HTTP_STATUS_NOT_FOUND,
-                          0, NULL, 0);
+        response->statusCode = HTTP_STATUS_NOT_FOUND;
         stringFree(path);
         return;
     }
@@ -256,16 +213,19 @@ void httpResponseLoadWebfile (HttpResponse *response, const char *url)
 
     fclose(file);
 
-    // Bestimme den MIME-Typ anhand des Datei-Suffixes
-    String *mimeType = stringCreate("Content-Type: ");
+    response->statusCode = HTTP_STATUS_OK;
+    response->payloadSize = fileSize;
+
+    // Versuche den MIME-Typ anhand des Datei-Suffixes zu bestimmen
     const char *urlSuffix = strrchr(path->cStr, '.');
     if (urlSuffix != NULL) urlSuffix++;
-    stringAppend(mimeType, getMimeType(urlSuffix));
+    const char *mimeType = getMimeType(urlSuffix);
 
-    httpResponseSetup(response, HTTP_STATUS_OK, fileSize, NULL,
-                      1, mimeType->cStr);
-
-    stringFree(mimeType);
+    if (mimeType != NULL) {
+        String *contentTypeAttribute = stringCreateWithFormat("Content-Type: %s", mimeType);
+        httpResponseAttributeAdd(response, contentTypeAttribute->cStr);
+        stringFree(contentTypeAttribute);
+    }
 
     stringFree(path);
 }
@@ -291,8 +251,8 @@ bool httpResponseCheckFilePath (HttpResponse *response, String *path)
     if ((realWebfileDirectory == NULL || realPath == NULL) ||
     // Pfad befindet sich ausserhalb des Webfile-Verzeichnisses (z.B. durch "..")
         strncmp(realWebfileDirectory, realPath, strlen(realWebfileDirectory)) != 0) {
-        httpResponseSetup(response, HTTP_STATUS_NOT_FOUND,
-                          0, NULL, 0);
+        response->statusCode = HTTP_STATUS_NOT_FOUND;
+
         if (realWebfileDirectory) free(realWebfileDirectory);
         if (realPath) free(realPath);
         return false;
@@ -308,10 +268,11 @@ bool httpResponseCheckFilePath (HttpResponse *response, String *path)
             stringAppend(location, realPath + strlen(realWebfileDirectory));
             stringAppend(location, "/");
 
-            httpResponseSetup(response, HTTP_STATUS_MOVED_PERMANENTLY,
-                              0, NULL, 1, location->cStr);
+            response->statusCode = HTTP_STATUS_MOVED_PERMANENTLY;
+            httpResponseAttributeAdd(response, location->cStr);
 
             stringFree(location);
+
             free(realWebfileDirectory);
             free(realPath);
             return false;
@@ -361,6 +322,34 @@ void commandToJson (Command *cmd, String *json)
 }
 
 
+/**
+ * Fügt einem Http-Response-Objekt ein zusätzliches Attribut hinzu.
+ *
+ * @param response - Zielobjekt
+ * @param attribute - HTTP Attribut
+ */
+void httpResponseAttributeAdd (HttpResponse *response, const char* attribute)
+{
+    arrayPushItem(response->attributes, stringCreate(attribute));
+}
+
+
+/**
+ * Gibt den Heap-Speicher aller zusätzlicher Attribute (String Objekte) in dem
+ * Http-Response-Objekt frei.
+ *
+ * @param response - Zielobjekt
+ */
+void httpResponseAttributesFree (HttpResponse *response)
+{
+    for (int i = 0; i < response->attributes->size; i++) {
+        String *att = response->attributes->cArr[i];
+        stringFree(att);
+    }
+    arrayClear(response->attributes);
+}
+
+
 const char* getHttpStatusName (int status)
 {
     static const int statusCode[] = {HTTP_STATUS_OK, HTTP_STATUS_MOVED_PERMANENTLY,
@@ -381,9 +370,11 @@ const char* getHttpStatusName (int status)
 
 const char* getMimeType (const char* fileSuffix)
 {
-    static const char *suffix[] = {"html", "js", "css", "jpg", "png"};
+    static const char *suffix[] = {"html", "js", "css",
+                                   "jpg", "png", "gif", "svg"};
     static const char *mimeType[] = {"text/html", "text/javascript", "text/css",
-                                     "image/jpeg", "image/png"};
+                                     "image/jpeg", "image/png",
+                                     "image/gif", "image/svg+xml"};
 
     if (fileSuffix != NULL) {
         for (int i = 0; i < sizeof(suffix) / sizeof(char *); i++) {
@@ -392,6 +383,6 @@ const char* getMimeType (const char* fileSuffix)
             }
         }
     }
-    return "text/plain";
+    return NULL;
 }
 
