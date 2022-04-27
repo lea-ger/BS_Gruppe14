@@ -56,7 +56,7 @@ bool commandExecute (Command *cmd);
 void commandParseInputMessage (Command *cmd, String *inputMessage);
 void commandFormatResponseMessage (const Command *cmd, String *responseMessage);
 
-void responseRecordsAdd (Array* records, const char* key, const char* value);
+ResponseRecord* responseRecordsAdd (Array* records, const char* key, const char* value);
 void responseRecordsFree (Array* records);
 
 

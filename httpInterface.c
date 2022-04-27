@@ -126,6 +126,7 @@ void httpRequestProcess (HttpRequest *request, HttpResponse *response)
         commandFree(cmd);
 
         response->statusCode = HTTP_STATUS_OK;
+        response->payloadSize = stringLength(response->payload);
         httpResponseAttributeAdd(response, "Content-Type: application/json");
         return;
     }
@@ -164,6 +165,7 @@ void httpResponseFormateMessage (HttpResponse *response, String *responseMessage
                         response->statusCode, statusName,
                         response->statusCode, statusName);
         response->payloadSize = stringLength(response->payload);
+        httpResponseAttributeAdd(response, "Content-Type: text/html");
     }
 
     stringAppendFormat(responseMessage, "Content-Length: %d\r\n", response->payloadSize);

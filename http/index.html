@@ -27,6 +27,64 @@
     <div id="jsGrid"></div>
 
     <script>
+
+        function getStorageRecord (filter) {
+            var d = $.Deferred();
+
+            $.ajax({
+                type: "GET",
+                url: "/storage/" + filter["key"],
+            }).done(function(response) {
+                d.resolve(response["responseRecords"]);
+            }).fail(function(response) {
+                d.reject("Verbindungsfehler!");
+            });
+
+            return d.promise();
+        }
+
+        function putStorageRecord (item) {
+            var d = $.Deferred();
+
+            $.ajax({
+                type: "PUT",
+                url: "/storage/" + item["key"],
+                data: item["value"]
+            }).done(function(response) {
+                if (response["responseRecords"].length == 0) {
+                    d.reject("Einfügen fehlgeschlagen: " + response["responseMessage"]);
+                }
+                else {
+                    d.resolve(response["responseRecords"][0]);
+                    alert(response["responseMessage"]);
+                }
+            }).fail(function(response) {
+                d.reject("Verbindungsfehler!");
+            });
+
+            return d.promise();
+        }
+
+        function deleteStorageRecord (item) {
+            var d = $.Deferred();
+
+            $.ajax({
+                type: "DELETE",
+                url: "/storage/" + item["key"],
+            }).done(function(response) {
+                if (response["responseRecords"].length == 0) {
+                    d.reject("Löschen fehlgeschlagen: " + response["responseMessage"]);
+                }
+                else {
+                    d.resolve();
+                }
+            }).fail(function(response) {
+                d.reject("Verbindungsfehler!");
+            });
+
+            return d.promise();
+        }
+
         $(function() {
             $("#jsGrid").jsGrid({
                 height: "90%",
@@ -40,42 +98,14 @@
                 pageSize: 50,
 
                 controller: {
-                    loadData: function(filter) {
-                        var d = $.Deferred();
+                    loadData: getStorageRecord,
+                    insertItem: putStorageRecord,
+                    updateItem: putStorageRecord,
+                    deleteItem: deleteStorageRecord
+                },
 
-                        $.ajax({
-                            type: "GET",
-                            url: "/storage/" + filter["key"],
-                        }).done(function(response) {
-                            d.resolve(response["responseRecords"]);
-                        });
-
-                        return d.promise();
-                    },
-                    
-                    insertItem: function(item) {
-                        return $.ajax({
-                            type: "PUT", // POST
-                            url: "/storage/",
-                            data: item
-                        });
-                    },
-                    
-                    updateItem: function(item) {
-                        return $.ajax({
-                            type: "PUT",
-                            url: "/storage/",
-                            data: item
-                        });
-                    },
-                    
-                    deleteItem: function(item) {
-                        return $.ajax({
-                            type: "DELETE",
-                            url: "/storage/",
-                            data: item
-                        });
-                    }
+                onError: function (obj) {
+                    alert(obj.args[0]);
                 },
 
                 fields: [

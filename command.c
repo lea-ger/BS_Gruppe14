@@ -283,13 +283,15 @@ void commandFormatResponseMessage (const Command *cmd, String *responseMessage)
  * @param key - Schlüssel
  * @param value - Wert
  */
-void responseRecordsAdd (Array* records, const char* key, const char* value)
+ResponseRecord* responseRecordsAdd (Array* records, const char* key, const char* value)
 {
     ResponseRecord *record = malloc(sizeof(ResponseRecord));
     record->key = stringCreate(key);
     record->value = stringCreate(value);
 
     arrayPushItem(records, record);
+
+    return record;
 }
 
 
