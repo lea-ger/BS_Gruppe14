@@ -75,9 +75,9 @@ void httpResponseFree (HttpResponse *response)
  */
 void httpRequestParseMessage (HttpRequest *request, String *requestMessage)
 {
-    char* payload = strstr(requestMessage->cStr, "\r\n\r\n");
-    char* method = strtok(requestMessage->cStr, " \t");
-    char* url    = strtok(NULL, " \t");
+    const char* payload = strstr(requestMessage->cStr, "\r\n\r\n");
+    const char* method = strtok(requestMessage->cStr, " \t");
+    const char* url    = strtok(NULL, " \t");
 
     stringToUpper(stringCopy(request->method, (method != NULL) ? method : ""));
     stringCopy(request->url, (url != NULL) ? url : "");

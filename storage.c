@@ -62,7 +62,7 @@ void eventCommandGet (Command *cmd)
     }
 
     if (cmd->responseRecords->size == 0) {
-        stringCopy(cmd->responseMessage,  "KEY_NONEXISTENT");
+        stringCopy(cmd->responseMessage,  "key_nonexistent");
     }
 }
 
@@ -73,14 +73,14 @@ void eventCommandPut (Command *cmd)
     if (response > 0) {
         responseRecordsAdd(cmd->responseRecords, cmd->key->cStr, cmd->value->cStr);
         if (response == 1) {
-            stringCopy(cmd->responseMessage,  "RECORD_OVERWRITTEN");
+            stringCopy(cmd->responseMessage,  "record_overwritten");
         }
         else if (response == 2) {
-            stringCopy(cmd->responseMessage,  "RECORD_NEW");
+            stringCopy(cmd->responseMessage,  "record_new");
         }
     }
     else {
-        stringCopy(cmd->responseMessage,  "STORAGE_FULL");
+        stringCopy(cmd->responseMessage,  "storage_full");
     }
 }
 
@@ -92,12 +92,12 @@ void eventCommandDel (Command *cmd)
     }
     else {
         if (deleteStorageRecord (cmd->key->cStr)) {
-            responseRecordsAdd(cmd->responseRecords, cmd->key->cStr, "KEY_DELETED");
+            responseRecordsAdd(cmd->responseRecords, cmd->key->cStr, "key_deleted");
         }
     }
 
     if (cmd->responseRecords->size == 0) {
-        stringCopy(cmd->responseMessage,  "KEY_NONEXISTENT");
+        stringCopy(cmd->responseMessage,  "key_nonexistent");
     }
 }
 
@@ -221,7 +221,7 @@ void deleteMultipleStorageRecords (const char* wildcardKey, Array* result)
     for (int i = 0; i < *storageEndIndex; i++) {
         if (*storage[i].key != '\0' &&
                 strMatchWildcard(storage[i].key, wildcardKey)) {
-            responseRecordsAdd(result, storage[i].key, "KEY_DELETED");
+            responseRecordsAdd(result, storage[i].key, "key_deleted");
             strcpy(storage[i].key, "");
         }
     }

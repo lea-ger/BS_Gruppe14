@@ -15,9 +15,6 @@
 #include <assert.h>
 
 
-#define DELIMITER " "
-
-
 typedef struct {
     String *name;
     String *key;

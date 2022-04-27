@@ -20,7 +20,7 @@ void freeModulNetwork ()
 
 void eventCommandQuit (Command *cmd)
 {
-    stringCopy(cmd->responseMessage,  "GOODBYE");
+    stringCopy(cmd->responseMessage,  "goodbye");
 }
 
 
@@ -147,6 +147,8 @@ void clientHandlerCommand (SOCKET socket)
         }
 
         commandParseInputMessage(cmd, buffer);
+        printf("Cmd-%d: %s %s %s\n", getpid(),
+               cmd->name->cStr, cmd->key->cStr, cmd->value->cStr);
         commandExecute(cmd);
         commandFormatResponseMessage(cmd, buffer);
 
@@ -182,7 +184,8 @@ void clientHandlerHttp (SOCKET socket) {
     }
     else if (size > 0) {
         httpRequestParseMessage(request, buffer);
-        printf("%s %s\n", request->method->cStr, request->url->cStr);
+        printf("Http-%d: %s %s %s\n", getpid(),
+               request->method->cStr, request->url->cStr, request->payload->cStr);
         httpRequestProcess(request, response);
         httpResponseFormateMessage(response, buffer);
 

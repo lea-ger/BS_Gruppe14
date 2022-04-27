@@ -170,15 +170,18 @@ bool commandExecute (Command *cmd)
     if (!stringIsEmpty(cmd->key)) argc++;
     if (!stringIsEmpty(cmd->value)) argc++;
     if (argc < entry->argc) {
-        stringCopy(cmd->responseMessage, "ARGUMENT_MISSING");
+        stringCopy(cmd->responseMessage, "argument_missing");
         return false;
     }
 
     if (!stringMatchAllChar(cmd->key, (entry->wildcardKey) ? "?*" : "", STR_MATCH_ALNUM) ||
             !stringMatchAllChar(cmd->value, " ", STR_MATCH_ALNUM)) {
-        stringCopy(cmd->responseMessage, "ARGUMENT_BAD_SYMBOL");
+        stringCopy(cmd->responseMessage, "argument_bad_symbol");
         return false;
     }
+
+    stringCopy(cmd->responseMessage, "");
+    responseRecordsFree(cmd->responseRecords);
 
     if (entry->callback == NULL) {
         return false;
@@ -200,32 +203,12 @@ void commandParseInputMessage (Command *cmd, String *inputMessage)
 {
     stringTrimSpaces(inputMessage);
 
-    // strtok() ist nicht thread-safe
-    char *name = strtok(inputMessage->cStr, DELIMITER);
-    if (name != NULL) {
-        strToUpper(name);
-    }
-    else {
-        name = "";
-    }
+    const char *name = strtok(inputMessage->cStr, " \t");
+    const char *key = strtok(NULL, " \t");
+    const char *value = strtok(NULL, "");
 
-    stringCopy(cmd->responseMessage, "");
-    responseRecordsFree(cmd->responseRecords);
-
-    CommandEntry *entry = lookupCommandEntry(name);
-    if (entry == NULL) {
-        stringCopy(cmd->name, "");
-        stringCopy(cmd->key, "");
-        stringCopy(cmd->value, "");
-        return;
-    }
-
-    stringCopy(cmd->name, name);
-
-    char *key = strtok(NULL, DELIMITER);
+    stringToUpper(stringCopy(cmd->name, (name != NULL) ? name : ""));
     stringCopy(cmd->key, (key != NULL) ? key : "");
-
-    char *value = strtok(NULL, "");
     stringCopy(cmd->value, (value != NULL) ? value : "");
 }
 
