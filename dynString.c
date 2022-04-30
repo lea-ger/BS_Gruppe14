@@ -17,7 +17,9 @@ String* stringCreateWithCapacity (const char *value, size_t capacity)
     str->cStr[capacity] = '\0';
     str->capacity = capacity;
 
-    strncpy(str->cStr, value, capacity);
+    strncpy(str->cStr, value, capacity+1);
+
+    str->length = strlen(value);
 
     return str;
 }
@@ -62,6 +64,8 @@ String* stringCreateWithFormat (const char *format, ...)
     vsnprintf(str->cStr, capacity+1, format, vaList);
     va_end(vaList);
 
+    str->length = capacity;
+
     return str;
 }
 
@@ -90,6 +94,7 @@ void stringReserve (String *str, size_t capacity)
     str->cStr = realloc(str->cStr, (capacity+1) * sizeof(char));
     str->cStr[capacity] = '\0';
     str->capacity = capacity;
+    if (capacity < str->length) str->length = capacity;
 }
 
 
@@ -101,7 +106,7 @@ void stringReserve (String *str, size_t capacity)
  */
 void stringShrinkToFit (String *str)
 {
-    stringReserve(str, stringLength(str));
+    stringReserve(str, strlen(str->cStr));
 }
 
 
@@ -120,12 +125,25 @@ void stringAdjustCapacity (String *str, size_t newStrLen)
 /**
  * Gibt die Länge der Zeichenkette zurück.
  *
+ * Da C-Style Funktionen die Länge des String verändern können ohne
+ * das der Längenwert angepasst wird kann diese Funktion nur ein
+ * sicheres Maximum innerhalb des Puffers liefern. Wird trotzdem
+ * insbesondere von den Append-Funktionen benutzt um die Performance
+ * beim Formatieren sehr vieler Strings zu einem sehr Langen zu verbessern.
+ *
  * @param str - Zielobjekt
  * @return Länge der Zeichenkette
  */
-size_t stringLength (const String *str)
+size_t stringLength (String *str)
 {
-    return strlen(str->cStr);
+    if (str->capacity < str->length) {
+        str->cStr[str->capacity] = '\0';
+        str->length = strlen(str->cStr);
+    } else if (str->cStr[str->length] != '\0') {
+        str->length = strlen(str->cStr);
+    }
+
+    return str->length;
 }
 
 
@@ -165,6 +183,8 @@ String* stringCopy (String *str, const char *value)
 
     strcpy(str->cStr, value);
 
+    str->length = newStrLen;
+
     return str;
 }
 
@@ -177,10 +197,16 @@ String* stringCopy (String *str, const char *value)
  */
 String* stringAppend (String *str, const char *value)
 {
-    size_t newStrLen = strlen(str->cStr) + strlen(value);
+    size_t strLen = stringLength(str);
+    size_t attLen = strlen(value);
+    size_t newStrLen = strLen + attLen;
+
     stringAdjustCapacity(str, newStrLen);
 
-    strcat(str->cStr, value);
+    //strcat(str->cStr, value);
+    strncpy(&str->cStr[strLen], value, attLen+1);
+
+    str->length = newStrLen;
 
     return str;
 }
@@ -208,6 +234,8 @@ String* stringCopyFormat (String *str, const char *format, ...)
     vsnprintf(str->cStr, newStrLen+1, format, vaList);
     va_end(vaList);
 
+    str->length = newStrLen;
+
     return str;
 }
 
@@ -222,19 +250,23 @@ String* stringCopyFormat (String *str, const char *format, ...)
  */
 String* stringAppendFormat (String *str, const char *format, ...)
 {
-    size_t strLen = strlen(str->cStr);
+    size_t strLen = stringLength(str);
 
     va_list vaList;
 
     va_start(vaList, format);
-    size_t newStrLen = strLen + vsnprintf(NULL, 0, format, vaList);
+    size_t attLen = vsnprintf(NULL, 0, format, vaList);
     va_end(vaList);
+
+    size_t newStrLen = strLen + attLen;
 
     stringAdjustCapacity(str, newStrLen);
 
     va_start(vaList, format);
-    vsnprintf(&str->cStr[strLen], newStrLen-strLen+1, format, vaList);
+    vsnprintf(&str->cStr[strLen], attLen+1, format, vaList);
     va_end(vaList);
+
+    str->length = newStrLen;
 
     return str;
 }
@@ -278,6 +310,9 @@ String* stringToLower (String *str)
 String* stringCut (String *str, size_t start, size_t end)
 {
     strCut(str->cStr, start, end);
+
+    str->length = end - start;
+
     return str;
 }
 

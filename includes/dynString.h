@@ -30,6 +30,7 @@
 
 typedef struct {
     char *cStr;
+    size_t length;
     size_t capacity;
 } String;
 
@@ -41,7 +42,7 @@ void stringFree (String* str);
 void stringReserve (String* str, size_t capacity);
 void stringShrinkToFit (String* str);
 
-size_t stringLength (const String* str);
+size_t stringLength (String* str);
 bool stringIsEmpty (const String* str);
 bool stringEquals (const String* str, const char* value);
 

@@ -161,6 +161,9 @@ void commandFree (Command* cmd)
  */
 bool commandExecute (Command *cmd)
 {
+    stringCopy(cmd->responseMessage, "");
+    responseRecordsFree(cmd->responseRecords);
+
     CommandEntry *entry = lookupCommandEntry(cmd->name->cStr);
     if (entry == NULL) {
         return false;
@@ -179,9 +182,6 @@ bool commandExecute (Command *cmd)
         stringCopy(cmd->responseMessage, "argument_bad_symbol");
         return false;
     }
-
-    stringCopy(cmd->responseMessage, "");
-    responseRecordsFree(cmd->responseRecords);
 
     if (entry->callback == NULL) {
         return false;
