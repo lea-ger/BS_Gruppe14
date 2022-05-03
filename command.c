@@ -233,10 +233,8 @@ void commandFormatResponseMessage (const Command *cmd, String *responseMessage)
         stringCopy(responseMessage, "");
         for (int i = 0; i < records; i++) {
             ResponseRecord *record = cmd->responseRecords->cArr[i];
-            const char *key = record->key->cStr;
-            const char *value = record->value->cStr;
             stringAppendFormat(responseMessage, "%s:%s:%s\r\n",
-                               cmd->name->cStr, key, value);
+                               cmd->name->cStr, record->key->cStr, record->value->cStr);
         }
         return;
     }

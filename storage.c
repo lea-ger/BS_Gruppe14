@@ -7,7 +7,7 @@ static Record *storage = NULL;
 static int *storageEndIndex = NULL;
 
 
-void initModulStorage ()
+void initModulStorage (bool snapshotTimer)
 {
     registerCommandEntry("GET", 1, true, eventCommandGet);
     registerCommandEntry("PUT", 2, false, eventCommandPut);
@@ -30,6 +30,13 @@ void initModulStorage ()
 
     if (loadStorageFromFile()) {
         printf("Storage data was loaded from file.\n");
+    }
+
+    if (snapshotTimer && fork() == 0) {
+        prctl(PR_SET_NAME, (unsigned long)"kvsvr(snapshot)");
+        runSnapshotTimer();
+
+        exit(EXIT_SUCCESS);
     }
 }
 
@@ -110,14 +117,17 @@ void eventCommandDel (Command *cmd)
  * NICHT AUSSERHALB EINES KRITISCHEN ABSCHNITTS AUFRUFEN!!!
  *
  * @param key - Suchschlüssel
+ * @param accessTyp - Zugriffsart des Aufrufers
  * @return - Index des gefundenen Eintrags
  */
-int findStorageRecord (const char* key)
+int findStorageRecord (const char* key, int accessType)
 {
     for (int i = 0; i < *storageEndIndex; i++) {
         if (strcmp(storage[i].key, key) == 0) {
             return i;
         }
+        leaveCriticalSection(accessType);
+        enterCriticalSection(accessType);
     }
     return -1;
 }
@@ -131,11 +141,17 @@ int findStorageRecord (const char* key)
  */
 bool getStorageRecord (const char* key, String* value)
 {
-    int index = findStorageRecord(key);
+    enterCriticalSection(READ_ACCESS);
+
+    int index = findStorageRecord(key, READ_ACCESS);
     if (index != -1) {
         stringCopy(value, storage[index].value);
+
+        leaveCriticalSection(READ_ACCESS);
         return true;
     }
+
+    leaveCriticalSection(READ_ACCESS);
     return false;
 }
 
@@ -151,24 +167,32 @@ bool getStorageRecord (const char* key, String* value)
  */
 int putStorageRecord (const char* key, const char* value)
 {
+    enterCriticalSection(WRITE_ACCESS);
+
     // Sucht nach existierenden Einträgen
-    int index = findStorageRecord(key);
+    int index = findStorageRecord(key, WRITE_ACCESS);
     if (index != -1) {
         strncpy(storage[index].value, value, STORAGE_VALUE_SIZE);
+
+        leaveCriticalSection(WRITE_ACCESS);
         return 1; // RECORD_OVERWRITTEN
     }
 
+    // FIXME: DOPPELTES EINFÜGEN!
     // Sucht nach dem ersten freien Platz oder einem Platz am Ende
-    index = findStorageRecord("");
+    index = findStorageRecord("", WRITE_ACCESS);
     if (index == -1 && *storageEndIndex < STORAGE_ENTRY_SIZE) {
         index = (*storageEndIndex)++;
     }
     if (index != -1) {
         strncpy(storage[index].key, key, STORAGE_KEY_SIZE);
         strncpy(storage[index].value, value, STORAGE_VALUE_SIZE);
+
+        leaveCriticalSection(WRITE_ACCESS);
         return 2; // RECORD_NEW
     }
 
+    leaveCriticalSection(WRITE_ACCESS);
     return 0; // STORAGE_FULL
 }
 
@@ -181,11 +205,17 @@ int putStorageRecord (const char* key, const char* value)
  */
 bool deleteStorageRecord (const char* key)
 {
-    int index = findStorageRecord(key);
+    enterCriticalSection(WRITE_ACCESS);
+
+    int index = findStorageRecord(key, WRITE_ACCESS);
     if (index != -1) {
         *storage[index].key = '\0';
+
+        leaveCriticalSection(WRITE_ACCESS);
         return true;
     }
+
+    leaveCriticalSection(WRITE_ACCESS);
     return false;
 }
 
@@ -199,12 +229,20 @@ bool deleteStorageRecord (const char* key)
  */
 void getMultipleStorageRecords (const char* wildcardKey, Array* result)
 {
-    for (int i = 0; i < *storageEndIndex; i++) {
-        if (*storage[i].key != '\0' &&
+    for (int i = 0;; i++) {
+        enterCriticalSection(READ_ACCESS);
+        if (i >= *storageEndIndex) {
+            leaveCriticalSection(READ_ACCESS);
+            break;
+        }
+        else if (*storage[i].key != '\0' &&
                 strMatchWildcard(storage[i].key, wildcardKey)) {
             responseRecordsAdd(result, storage[i].key, storage[i].value);
         }
+        leaveCriticalSection(READ_ACCESS);
     }
+
+    // TODO: Filtere mögliche doppelte Einträge?
 }
 
 
@@ -218,13 +256,21 @@ void getMultipleStorageRecords (const char* wildcardKey, Array* result)
  */
 void deleteMultipleStorageRecords (const char* wildcardKey, Array* result)
 {
-    for (int i = 0; i < *storageEndIndex; i++) {
-        if (*storage[i].key != '\0' &&
-                strMatchWildcard(storage[i].key, wildcardKey)) {
+    for (int i = 0;; i++) {
+        enterCriticalSection(WRITE_ACCESS);
+        if (i >= *storageEndIndex) {
+            leaveCriticalSection(WRITE_ACCESS);
+            break;
+        }
+        else if (*storage[i].key != '\0' &&
+                 strMatchWildcard(storage[i].key, wildcardKey)) {
             responseRecordsAdd(result, storage[i].key, "key_deleted");
             strcpy(storage[i].key, "");
         }
+        leaveCriticalSection(WRITE_ACCESS);
     }
+
+    // TODO: Filtere mögliche doppelte Einträge? Ist "doppeltes Löschen" ein Problem?
 }
 
 
@@ -279,3 +325,26 @@ bool saveStorageToFile ()
     return true;
 }
 
+
+void eventSnapshotTimer ()
+{
+    clock_t clockTime = clock();
+
+    enterCriticalSection(READ_ACCESS);
+    saveStorageToFile();
+    leaveCriticalSection(READ_ACCESS);
+
+    double time_taken = (double)(clock() - clockTime) / CLOCKS_PER_SEC;
+    printf("Storage saved by Snapshot-Timer (time taken: %f sec).\n", time_taken);
+    fflush(stdout);
+}
+
+
+void runSnapshotTimer ()
+{
+    signal(SIGALRM, eventSnapshotTimer);
+    for (;;) {
+        alarm(STORAGE_SNAPSHOT_INTERVAL);
+        pause();
+    }
+}

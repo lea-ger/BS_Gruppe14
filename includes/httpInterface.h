@@ -52,7 +52,7 @@ void httpResponseFree (HttpResponse *response);
 
 void httpRequestParseMessage (HttpRequest *request, String *requestMessage);
 void httpRequestProcess (HttpRequest *request, HttpResponse *response);
-void httpResponseFormateMessage (HttpResponse *response, String *responseMessage);
+void httpResponseFormateMessage (HttpResponse *response, String *responseMessage, size_t *responseMessageSize);
 
 void httpResponseLoadWebfile (HttpResponse *response, const char *url);
 bool httpResponseCheckFilePath (HttpResponse *response, String *path);

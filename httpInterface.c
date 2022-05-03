@@ -148,7 +148,7 @@ void httpRequestProcess (HttpRequest *request, HttpResponse *response)
  * @param response - Zielobjekt
  * @param responseMessage - Antwortnachricht
  */
-void httpResponseFormateMessage (HttpResponse *response, String *responseMessage)
+void httpResponseFormateMessage (HttpResponse *response, String *responseMessage, size_t *responseMessageSize)
 {
     const char* statusName = getHttpStatusName(response->statusCode);
 
@@ -177,7 +177,9 @@ void httpResponseFormateMessage (HttpResponse *response, String *responseMessage
     }
     stringAppend(responseMessage, "\r\n");
 
-    stringReserve(responseMessage, stringLength(responseMessage) + response->payloadSize);
+    *responseMessageSize = stringLength(responseMessage) + response->payloadSize;
+
+    stringReserve(responseMessage, *responseMessageSize);
     memcpy(&responseMessage->cStr[stringLength(responseMessage)],
            response->payload->cStr, response->payloadSize);
 }
@@ -298,25 +300,24 @@ bool httpResponseCheckFilePath (HttpResponse *response, String *path)
  */
 void commandToJson (Command *cmd, String *json)
 {
+    size_t records = cmd->responseRecords->size;
+
     stringCopyFormat(json, "{\r\n"
                            "\"command\":\"%s\",\r\n"
                            "\"key\":\"%s\",\r\n"
                            "\"value\":\"%s\",\r\n"
                            "\"responseMessage\":\"%s\",\r\n"
+                           "\"responseRecordsSize\":%d,\r\n"
                            "\"responseRecords\":[\r\n",
                      cmd->name->cStr, cmd->key->cStr, cmd->value->cStr,
-                     cmd->responseMessage->cStr);
-
-    size_t records = cmd->responseRecords->size;
+                     cmd->responseMessage->cStr, records);
 
     for (int i = 0; i < records; i++) {
         ResponseRecord *record = cmd->responseRecords->cArr[i];
-        const char *key = record->key->cStr;
-        const char *value = record->value->cStr;
         stringAppendFormat(json, "{\r\n"
                                  "\t\"key\":\"%s\",\r\n"
                                  "\t\"value\":\"%s\"\r\n",
-                           key, value);
+                           record->key->cStr, record->value->cStr);
         stringAppend(json, (i == records - 1) ? "}\r\n" : "},\r\n");
     }
 

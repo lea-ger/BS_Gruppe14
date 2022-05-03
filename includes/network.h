@@ -12,6 +12,7 @@
 #include "utils.h"
 #include "command.h"
 #include "httpInterface.h"
+#include "lock.h"
 
 #include <stdio.h>
 #include <sys/socket.h>
@@ -29,7 +30,7 @@
 #define HTTP_SERVER_PORT 5680
 
 
-void initModulNetwork ();
+void initModulNetwork (bool httpInterface);
 void freeModulNetwork ();
 
 void eventCommandQuit (Command *cmd);

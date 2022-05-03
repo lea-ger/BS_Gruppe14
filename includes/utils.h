@@ -5,6 +5,9 @@
 #include "dynArray.h"
 
 #include <stdbool.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/prctl.h>
 
 
 void freeResourcesAndExit();

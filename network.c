@@ -5,9 +5,16 @@ static const char *commandQuitName = "QUIT";
 static SOCKET listener = 0; // "Rendezvous-Descriptor"
 
 
-void initModulNetwork ()
+void initModulNetwork (bool httpInterface)
 {
     registerCommandEntry(commandQuitName, 0, false, eventCommandQuit);
+
+    if (httpInterface && fork() == 0) {
+        prctl(PR_SET_NAME, (unsigned long)"kvsvr(http)");
+        runServerLoop("Http", HTTP_SERVER_PORT, clientHandlerHttp);
+
+        exit(EXIT_SUCCESS);
+    }
 }
 
 
@@ -29,9 +36,9 @@ int receiveMessage (SOCKET socket, char *message)
     int size = recv(socket, message, RECV_BUFFER_SIZE, 0);
 
     if (size == RECV_BUFFER_SIZE) {
-        char termSign = message[RECV_BUFFER_SIZE-1];
+        char termSign = message[RECV_BUFFER_SIZE - 1];
         if (termSign != '\0' && termSign != '\n')
-            return RECV_BUFFER_SIZE+1;
+            return RECV_BUFFER_SIZE + 1;
     }
 
     if (size < 0) {
@@ -174,23 +181,21 @@ void clientHandlerHttp (SOCKET socket) {
     HttpRequest *request = httpRequestCreate();
     HttpResponse *response = httpResponseCreate();
 
-    int size = receiveMessage(socket, buffer->cStr);
+    size_t size = receiveMessage(socket, buffer->cStr);
     if (size > RECV_BUFFER_SIZE) {
         response->statusCode = HTTP_STATUS_INTERNAL_SERVER_ERROR;
-        httpResponseFormateMessage(response, buffer);
+        httpResponseFormateMessage(response, buffer, &size);
 
-        // (Missbrauch von String.capacity)
-        send(socket, buffer->cStr, buffer->capacity, 0);
+        send(socket, buffer->cStr, size, 0);
     }
     else if (size > 0) {
         httpRequestParseMessage(request, buffer);
         printf("Http-%d: %s %s %s\n", getpid(),
                request->method->cStr, request->url->cStr, request->payload->cStr);
         httpRequestProcess(request, response);
-        httpResponseFormateMessage(response, buffer);
+        httpResponseFormateMessage(response, buffer, &size);
 
-        // (Missbrauch von String.capacity)
-        send(socket, buffer->cStr, buffer->capacity, 0);
+        send(socket, buffer->cStr, size, 0);
     }
 
     httpResponseFree(response);

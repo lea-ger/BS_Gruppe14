@@ -13,6 +13,8 @@
 #define STORAGE_VALUE_SIZE 256
 #define STORAGE_ENTRY_SIZE 1000
 
+#define STORAGE_SNAPSHOT_INTERVAL 60
+
 
 static const char* storageFile = "../data.csv";
 
@@ -27,7 +29,7 @@ void eventCommandGet (Command *cmd);
 void eventCommandPut (Command *cmd);
 void eventCommandDel (Command *cmd);
 
-void initModulStorage ();
+void initModulStorage (bool snapshotTimer);
 void freeModulStorage ();
 
 bool getStorageRecord (const char* key, String* value);
@@ -39,6 +41,8 @@ void deleteMultipleStorageRecords (const char* wildcardKey, Array* result);
 
 bool loadStorageFromFile ();
 bool saveStorageToFile ();
+
+void runSnapshotTimer ();
 
 
 #endif //SERVER_STORAGE_H
