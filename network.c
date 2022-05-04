@@ -1,8 +1,17 @@
 #include "network.h"
 
 
+/*
+ * Netzwerk-Kommunikation
+ *
+ * Server-Loop zur Annahme eingehender TCP/IP Verbindungen und
+ * Client-Handler zur Ein- und Ausgabe der Nutzdaten.
+ *
+ */
+
+
 static const char *commandQuitName = "QUIT";
-static SOCKET listener = 0; // "Rendezvous-Descriptor"
+SOCKET processSocket = 0;
 
 
 void initModulNetwork (bool httpInterface)
@@ -20,8 +29,8 @@ void initModulNetwork (bool httpInterface)
 
 void freeModulNetwork ()
 {
-    if (listener != 0)
-        close(listener);
+    if (processSocket != 0)
+        close(processSocket);
 }
 
 
@@ -31,9 +40,20 @@ void eventCommandQuit (Command *cmd)
 }
 
 
-int receiveMessage (SOCKET socket, char *message)
+/**
+ * Empfängt eine einzelne Text-Nachrichten von einer Socket-Verbindung.
+ *
+ * Wenn die Puffergröße RECV_BUFFER_SIZE erreicht wurde aber die
+ * Nachricht weder mit einer String-Terminierung noch einem Zeilenumbruch
+ * endet wird davon ausgegangen das der Puffer überschritten wurde.
+ * Dann ist der Rückgabewert größer als RECV_BUFFER_SIZE.
+ *
+ * @param socket - Verbindungs-Deskriptor
+ * @param message - Eingangsnachricht
+ */
+size_t receiveMessage (SOCKET socket, char *message)
 {
-    int size = recv(socket, message, RECV_BUFFER_SIZE, 0);
+    size_t size = recv(socket, message, RECV_BUFFER_SIZE, 0);
 
     if (size == RECV_BUFFER_SIZE) {
         char termSign = message[RECV_BUFFER_SIZE - 1];
@@ -42,7 +62,7 @@ int receiveMessage (SOCKET socket, char *message)
     }
 
     if (size < 0) {
-        perror("recv");
+        perror("receiveMessage recv");
     }
     else {
         message[size] = '\0';
@@ -64,10 +84,10 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
 {
     struct sockaddr_in serverAddr;
 
-    // Erzeugt ein TCP/IP(v4) Socket
-    listener = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listener < 0) {
-        fatalError("socket");
+    // Erzeugt ein TCP/IP(v4) Socket ("Rendezvous-Descriptor")
+    processSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (processSocket < 0) {
+        fatalError("runServerLoop socket");
     }
 
     memset(&serverAddr, 0, sizeof (serverAddr));
@@ -80,17 +100,17 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
         // anstatt ihn für die Dauer von 2*Maximum Segment Lifetime (30-120 Sekunden)
         // in den TIME-WAIT Status zu gehen, um auf mögliche verzögerte Pakete zu warten.
         int flag = 1;
-        setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int));
+        setsockopt(processSocket, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int));
     }
 
     // Bindet den Socket an eine Adresse
-    if (bind(listener,(struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        fatalError("bind");
+    if (bind(processSocket,(struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        fatalError("runServerLoop bind");
     }
 
     // Eingehende Verbindungen in einer Warteschlange aufnehmen
-    if (listen(listener, 5) == -1) {
-        fatalError("listen");
+    if (listen(processSocket, 5) == -1) {
+        fatalError("runServerLoop listen");
     }
 
     printf("%s-Server listening on port %i\n", name, port);
@@ -101,16 +121,18 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
 
     for (;;) {
         // Eingehende Verbindung aus der Warteschlange akzeptieren
-        clientSocket = accept(listener, (struct sockaddr*)&clientAddr, &len);
+        clientSocket = accept(processSocket, (struct sockaddr*)&clientAddr, &len);
         if (clientSocket < 0) {
-            fatalError("accept");
+            fatalError("runServerLoop accept");
         }
 
         // Neuer Client-Handler Prozess
         if (fork() == 0) {
             signal(SIGINT, SIG_DFL);
             signal(SIGTERM, SIG_DFL);
-            close(listener);
+            close(processSocket);
+
+            processSocket = clientSocket;
 
             printf("%s-Client %d (%s) connected\n", name, getpid(), inet_ntoa(clientAddr.sin_addr));
             clientHandler(clientSocket);
@@ -140,10 +162,8 @@ void clientHandlerCommand (SOCKET socket)
     String *buffer = stringCreateWithCapacity("", RECV_BUFFER_SIZE);
     Command *cmd = commandCreate();
 
-    int size = 0;
-
     do {
-        size = receiveMessage(socket, buffer->cStr);
+        size_t size = receiveMessage(socket, buffer->cStr);
         if (size > RECV_BUFFER_SIZE) {
             const char *exceedMsg = "BUFFER_EXCEEDED\r\n";
             send(socket, exceedMsg, strlen(exceedMsg), 0);
@@ -202,4 +222,3 @@ void clientHandlerHttp (SOCKET socket) {
     httpRequestFree(request);
     stringFree(buffer);
 }
-

@@ -1,13 +1,6 @@
 #ifndef SERVER_NETWORK_H
 #define SERVER_NETWORK_H
 
-/*
- * Netzwerk-Kommunikation
- *
- * Server-Loop zur Annahme eingehender TCP/IP Verbindungen und
- * Client-Handler zur Ein- und Ausgabe der Nutzdaten.
- *
- */
 
 #include "utils.h"
 #include "command.h"
@@ -24,10 +17,12 @@
 
 
 #define SOCKET int
-#define RECV_BUFFER_SIZE 4096
+#define RECV_BUFFER_SIZE PAGE_SIZE
 
 #define COMMAND_SERVER_PORT 5678
 #define HTTP_SERVER_PORT 5680
+
+extern SOCKET processSocket;
 
 
 void initModulNetwork (bool httpInterface);
@@ -39,7 +34,7 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
 void clientHandlerCommand (SOCKET socket);
 void clientHandlerHttp (SOCKET socket);
 
-int receiveMessage (SOCKET socket, char* message);
+size_t receiveMessage (SOCKET socket, char* message);
 
 
 #endif //SERVER_NETWORK_H

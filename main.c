@@ -7,22 +7,28 @@
 #include "network.h"
 
 
-void initAllModules ()
+static int argSnapshotInterval = 0; // 0 = Snapshot-Timer deaktiviert
+static bool argHttpInterface = true;
+static bool argNewsletter = true;
+static bool argSystemExec = true;
+
+
+static void initAllModules ()
 {
     initModulCommand();
     initModulLock();
-    initModulStorage(false);
-    initModulNewsletter();
-    initModulSystemExec();
-    initModulNetwork(true);
+    initModulStorage(argSnapshotInterval);
+    if (argNewsletter) initModulNewsletter();
+    if (argSystemExec) initModulSystemExec();
+    initModulNetwork(argHttpInterface);
 }
 
 
-void freeAllModules ()
+static void freeAllModules ()
 {
     freeModulNetwork();
-    freeModulSystemExec();
-    freeModulNewsletter();
+    if (argSystemExec) freeModulSystemExec();
+    if (argNewsletter) freeModulNewsletter();
     freeModulStorage();
     freeModulLock();
     freeModulCommand();

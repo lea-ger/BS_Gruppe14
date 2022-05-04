@@ -1,6 +1,16 @@
 #include "dynArray.h"
 
 
+/*
+ * Dynamisches Array
+ *
+ * Ein Satz von Funktionen die mit einem sich selbst vergrößerndem
+ * Heap-Speicher arbeiten.
+ * Inspiriert von der C++ STL Klasse "vector".
+ *
+ */
+
+
 /**
  * Erzeugt ein neues Array auf dem Heap-Speicher und legt
  * die anfängliche Item-Kapazität fest.
@@ -62,7 +72,7 @@ Array* arrayCreateWithArguments (size_t size, ...)
     for (int i = 0; i < size; i++) {
         void *ptr = va_arg(vaList, void*);
         arr->cArr[i] = ptr;
-    };
+    }
     va_end(vaList);
 
     return arr;
@@ -162,7 +172,7 @@ void arraySetItem (Array *arr, size_t index, void *item)
 void arrayPushItem (Array *arr, void *item)
 {
     if (arr->size == arr->capacity) {
-        int newCapacity = arr->capacity * 2;
+        size_t newCapacity = arr->capacity * 2;
         if (INITIAL_ARRAY_CAPACITY > newCapacity) {
             newCapacity = INITIAL_ARRAY_CAPACITY;
         }
@@ -199,12 +209,12 @@ void arrayShiftItem (Array *arr, size_t src, size_t dest)
     void *item = arr->cArr[src];
 
     if (src < dest) {
-        for (int i = src; i < dest; i++) {
+        for (size_t i = src; i < dest; i++) {
             arr->cArr[i] = arr->cArr[i+1];
         }
     }
     else if (src > dest) {
-        for (int i = src; i > dest; i--) {
+        for (size_t i = src; i > dest; i--) {
             arr->cArr[i] = arr->cArr[i-1];
         }
     }
@@ -253,5 +263,53 @@ void arrayForEach (Array *arr, void (*func)(void*)) {
     for (int i = 0; i < arr->size; i++) {
         func(arr->cArr[i]);
     }
+}
+
+
+void arrayInsertionSort (Array *arr, int (*compare)(void*, void*))
+{
+    return arrInsertionSort(arr->cArr, arr->size, compare);
+}
+
+
+size_t arrayMakeUnique (Array *arr, int (*compare)(void*, void*))
+{
+    size_t size = arrMakeUnique(arr->cArr, arr->size, compare);
+    arr->size = size;
+    return size;
+}
+
+
+void arrInsertionSort (void **arr, size_t size, int (*compare)(void*, void*))
+{
+    for (int j = 1; j < size; j++) {
+        void *key = arr[j];
+
+        int i = j - 1;
+        for (; i >= 0 && compare(arr[i], key) > 0; i--) {
+            arr[i + 1] = arr[i];
+        }
+
+        arr[i + 1] = key;
+    }
+}
+
+
+// https://en.cppreference.com/w/cpp/algorithm/unique
+size_t arrMakeUnique (void **arr, size_t size, int (*compare)(void*, void*))
+{
+    if (size == 0) return 0;
+    int newSize = 0;
+
+    for (int i = 1; i < size; i++) {
+        if (compare(arr[newSize], arr[i]) != 0) {
+            newSize++;
+        }
+        if (newSize != i) {
+            arr[newSize] = arr[i];
+        }
+    }
+
+    return newSize + 1;
 }
 

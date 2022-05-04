@@ -22,8 +22,8 @@ void freeModulLock ();
 void enterCriticalSection (int accessType);
 void leaveCriticalSection (int accessType);
 
-bool lockStorage ();
-bool unlockStorage ();
+bool enterExclusiveMode ();
+bool leaveExclusiveMode ();
 
 
 #endif //SERVER_LOCK_H

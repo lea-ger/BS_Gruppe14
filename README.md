@@ -16,6 +16,11 @@
 12. [x] OK - code uses semaphores (mandatory)
 13. [x] OK - transactions have no impact on other operations
 14. [x] OK - transactions make other clients block (mandatory)
-15. [ ] FAIL - publish/subscribe works for PUT (mandatory)
-16. [ ] FAIL - publish/subscribe works for DEL
+15. [x] OK - publish/subscribe works for PUT (mandatory)
+16. [x] OK - publish/subscribe works for DEL
 17. [x] OK - subscribing does not block
+
+Passed 17 of 17 tests.\
+Your progress: 100 %\
+You have passed all mandatory tests!
+

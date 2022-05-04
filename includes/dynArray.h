@@ -1,15 +1,6 @@
 #ifndef DYNARRAY_H
 #define DYNARRAY_H
 
-/*
- * Dynamisches Array
- *
- * Ein Satz von Funktionen die mit einem sich selbst vergrößerndem
- * Heap-Speicher arbeiten.
- * Inspiriert von der C++ STL Klasse "vector".
- *
- */
-
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
@@ -48,6 +39,11 @@ void arrayInsertItem (Array *arr, size_t index, void *item);
 void* arrayRemoveItem (Array *arr, size_t index);
 
 void arrayForEach (Array *arr, void (*func)(void*));
+void arrayInsertionSort (Array *arr, int (*compare)(void*, void*));
+size_t arrayMakeUnique (Array *arr, int (*compare)(void*, void*));
+
+void arrInsertionSort (void **arr, size_t size, int (*compare)(void*, void*));
+size_t arrMakeUnique (void **arr, size_t size, int (*compare)(void*, void*));
 
 
 #endif //DYNARRAY_H

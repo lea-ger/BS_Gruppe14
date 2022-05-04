@@ -1,7 +1,16 @@
 #include "command.h"
 
 
-static Array *commandTable = NULL;
+/*
+ * Befehlsverteiler
+ *
+ * Verantwortlich für das Interpretieren, Validieren und Ausführen eingehender Befehle,
+ * sowie dem Formatieren von Antwortnachrichten.
+ *
+ */
+
+
+static Array /* CommandEntry */ *commandTable = NULL;
 
 
 void initModulCommand ()
@@ -177,8 +186,8 @@ bool commandExecute (Command *cmd)
         return false;
     }
 
-    if (!stringMatchAllChar(cmd->key, (entry->wildcardKey) ? "?*" : "", STR_MATCH_ALNUM) ||
-            !stringMatchAllChar(cmd->value, " ", STR_MATCH_ALNUM)) {
+    if (!stringMatchAllChar(cmd->key,
+                            (entry->wildcardKey) ? "?*" : "", STR_MATCH_ALNUM)) {
         stringCopy(cmd->responseMessage, "argument_bad_symbol");
         return false;
     }
@@ -239,7 +248,7 @@ void commandFormatResponseMessage (const Command *cmd, String *responseMessage)
         return;
     }
 
-    // FIXME: Mehr Kontrolle bei der Ausgabe. Formatierungsflags? Errorcodes?
+    // TODO: Mehr Kontrolle bei der Ausgabe? Formatierungsflags? Errorcodes?
     stringCopy(responseMessage, cmd->name->cStr);
     if (!stringIsEmpty(cmd->key)) {
         stringAppend(responseMessage, ":");

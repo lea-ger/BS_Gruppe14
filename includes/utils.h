@@ -10,7 +10,11 @@
 #include <sys/prctl.h>
 
 
+#define PAGE_SIZE 4096
+
+
 void freeResourcesAndExit();
 void fatalError(const char *message);
+
 
 #endif //UTILS_H

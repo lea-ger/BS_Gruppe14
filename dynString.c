@@ -1,6 +1,16 @@
 #include "dynString.h"
 
 
+/*
+ * Dynamischer String
+ *
+ * Ein Satz von Funktionen die mit einem sich selbst vergrößerndem
+ * Heap-Speicher arbeiten.
+ * Inspiriert von der C++ STL Klasse "string".
+ *
+ */
+
+
 /**
  * Erzeugt einen neuen String auf dem Heap-Speicher und legt
  * die anfängliche Zeichenkapazität fest. Der Initialisierungswert

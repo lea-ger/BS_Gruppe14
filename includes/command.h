@@ -1,14 +1,6 @@
 #ifndef COMMAND_H
 #define COMMAND_H
 
-/*
- * Befehlsverteiler
- *
- * Verantwortlich für das Interpretieren, Validieren und Ausführen eingehender Befehle,
- * sowie dem Formatieren von Antwortnachrichten.
- *
- */
-
 #include "dynString.h"
 #include "dynArray.h"
 

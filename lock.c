@@ -1,16 +1,29 @@
 #include "lock.h"
 
 
+/*
+ * Synchronisations-Mechanismus
+ *
+ * Stellt mithilfe von Semaphoren einen Mechanismus für die Erhaltung der
+ * und Datenkonsistenz bei gleichzeitigem Zugriff und einen exklusiven Modus
+ * für das Storage bereit.
+ *
+ */
+
+
+// SEM_UNDO macht Operationen eines Prozesses rückgängig, wenn er sich beendet.
+// D.h. in diesem Fall, dass ein Client den Storage automatisch wieder freigibt,
+// wenn er sich im exklusiven Modus beendet.
 static int storageSemaphoreId = 0;
 static struct sembuf enterStorage = {0, -1, SEM_UNDO};
 static struct sembuf leaveStorage = {0, 1, SEM_UNDO};
 static struct sembuf enterReaderCounter = {1, -1, SEM_UNDO};
 static struct sembuf leaveReaderCounter = {1, 1, SEM_UNDO};
 
-static int readerCounterId = 0;
+static int shmReaderCounterId = 0;
 static int* readerCounter = NULL;
 
-static bool keyholder = false; // FIXME: Freigabe vor Beendigung des Clients... passiert schon... aber warum?
+static bool exclusiveMode = false;
 
 
 void initModulLock ()
@@ -18,15 +31,22 @@ void initModulLock ()
     registerCommandEntry("BEG", 0, false, eventCommandBeginn);
     registerCommandEntry("END", 0, false, eventCommandEnd);
 
-    readerCounterId = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | SHM_R | SHM_W);
-    readerCounter = shmat(readerCounterId, NULL, 0);
+    shmReaderCounterId = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | SHM_R | SHM_W);
+    if (shmReaderCounterId == -1) {
+        fatalError("initModulLock shmget");
+    }
+    readerCounter = shmat(shmReaderCounterId, NULL, 0);
     *readerCounter = 0;
 
     unsigned short marker[2] = {1, 1};
     storageSemaphoreId = semget(IPC_PRIVATE, 2, IPC_CREAT | 0644);
+    if (shmReaderCounterId == -1) {
+        fatalError("initModulLock semget");
+    }
     semctl(storageSemaphoreId, 1, SETALL, marker);
 
-    printf("Synchronization mechanisms created (Semaphore-Id %d).\n", storageSemaphoreId);
+    printf("Synchronization mechanisms created (Semaphore-Id %d, Sh.Mem.-Id %d).\n",
+           storageSemaphoreId, shmReaderCounterId);
 }
 
 
@@ -35,33 +55,38 @@ void freeModulLock ()
     semctl(storageSemaphoreId, 0, IPC_RMID);
 
     shmdt(readerCounter);
-    shmctl(readerCounterId, IPC_RMID, NULL);
+    shmctl(shmReaderCounterId, IPC_RMID, NULL);
 
-    printf("Synchronization mechanisms deleted (Semaphore-Id %d).\n", storageSemaphoreId);
+    printf("Synchronization mechanisms deleted (Semaphore-Id %d, Sh.Mem.-Id %d).\n",
+           storageSemaphoreId, shmReaderCounterId);
 }
 
 
 void eventCommandBeginn (Command *cmd)
 {
-    stringCopy(cmd->responseMessage,  lockStorage() ? "lock_successful" : "already_locked");
+    stringCopy(cmd->responseMessage, enterExclusiveMode() ? "locked" : "already_locked");
 }
 
 
 void eventCommandEnd (Command *cmd)
 {
-    stringCopy(cmd->responseMessage,  unlockStorage() ? "unlock_successful" : "not_locked");
+    stringCopy(cmd->responseMessage, leaveExclusiveMode() ? "unlocked" : "not_locked");
 }
 
 
 /**
- * Multi-Reader/Single-Writer lock
+ * Multi-Reader/Single-Writer Lock
  *
- * @param accessType
- * @return
+ * In dieser Lösung des Leser/Schreiber-Problems werden Leser stark bevorzugt
+ * und haben uneingeschränkten gleichzeitigen Zugriff. Schreibzugriffe sind nur
+ * möglich wenn es gerade keine Leser gibt. Der Nachteil ist, das die Gefahr
+ * besteht dass Schreiber verhungern.
+ *
+ * @param accessType - Datenzugriffs-Art
  */
 inline void enterCriticalSection (int accessType)
 {
-    if (keyholder) return;
+    if (exclusiveMode) return;
 
     if (accessType == READ_ACCESS) {
         semop(storageSemaphoreId, &enterReaderCounter, 1);
@@ -79,7 +104,7 @@ inline void enterCriticalSection (int accessType)
 
 inline void leaveCriticalSection (int accessType)
 {
-    if (keyholder) return;
+    if (exclusiveMode) return;
 
     if (accessType == READ_ACCESS) {
         semop(storageSemaphoreId, &enterReaderCounter, 1);
@@ -95,21 +120,29 @@ inline void leaveCriticalSection (int accessType)
 }
 
 
-bool lockStorage ()
+/**
+ * Realisiert den exklusiven Zugriff mit einer Down-Operation des
+ * Semaphore welcher den kritischen Bereich schützt. Wenn ein Client
+ * in den exklusiven Modus geht während dieser bereits genutzt wird,
+ * wird er selbst blockiert. (Schlecht für menschliche Interaktion,
+ * akzeptabel für IPC?)
+ *
+ */
+bool enterExclusiveMode ()
 {
-    if (!keyholder) {
+    if (!exclusiveMode) {
         semop(storageSemaphoreId, &enterStorage, 1);
-        keyholder = true;
+        exclusiveMode = true;
         return true;
     }
     return false;
 }
 
 
-bool unlockStorage ()
+bool leaveExclusiveMode ()
 {
-    if (keyholder) {
-        keyholder = false;
+    if (exclusiveMode) {
+        exclusiveMode = false;
         semop(storageSemaphoreId, &leaveStorage, 1);
         return true;
     }

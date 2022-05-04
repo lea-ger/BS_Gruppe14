@@ -1,15 +1,6 @@
 #ifndef DYNSTRING_H
 #define DYNSTRING_H
 
-/*
- * Dynamischer String
- *
- * Ein Satz von Funktionen die mit einem sich selbst vergrößerndem
- * Heap-Speicher arbeiten.
- * Inspiriert von der C++ STL Klasse "string".
- *
- */
-
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>

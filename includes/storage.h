@@ -4,19 +4,19 @@
 #include "utils.h"
 #include "command.h"
 #include "lock.h"
+#include "newsletter.h"
 
 #include <stdio.h>
 #include <sys/shm.h>
 
 
+#define FILE_BUFFER_SIZE PAGE_SIZE
+
 #define STORAGE_KEY_SIZE 64
 #define STORAGE_VALUE_SIZE 256
-#define STORAGE_ENTRY_SIZE 1000
+#define STORAGE_ENTRY_SIZE 1024
 
-#define STORAGE_SNAPSHOT_INTERVAL 60
-
-
-static const char* storageFile = "../data.csv";
+#define STORAGE_FILE "../data.csv"
 
 
 typedef struct {
@@ -29,8 +29,10 @@ void eventCommandGet (Command *cmd);
 void eventCommandPut (Command *cmd);
 void eventCommandDel (Command *cmd);
 
-void initModulStorage (bool snapshotTimer);
+void initModulStorage (int snapshotInterval);
 void freeModulStorage ();
+
+int findStorageRecord (const char* key);
 
 bool getStorageRecord (const char* key, String* value);
 int putStorageRecord (const char* key, const char* value);
@@ -42,7 +44,7 @@ void deleteMultipleStorageRecords (const char* wildcardKey, Array* result);
 bool loadStorageFromFile ();
 bool saveStorageToFile ();
 
-void runSnapshotTimer ();
+void runSnapshotTimer (int interval);
 
 
 #endif //SERVER_STORAGE_H
