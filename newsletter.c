@@ -173,9 +173,12 @@ bool takeSubscriberId ()
 
 void releaseSubscriberId ()
 {
-    for (int i = 0; i < STORAGE_ENTRY_SIZE; i++) {
-        subscribers[i] &= ~subscriberId;
+    if (subscriptionCounter > 0) {
+        for (int i = 0; i < STORAGE_ENTRY_SIZE; i++) {
+            subscribers[i] &= ~subscriberId;
+        }
     }
+    subscriptionCounter = 0;
     *usedSubscriberIds &= ~subscriberId;
     subscriberId = 0;
 }

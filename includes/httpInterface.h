@@ -1,15 +1,6 @@
 #ifndef SERVER_HTTPINTERFACE_H
 #define SERVER_HTTPINTERFACE_H
 
-/*
- * Ein einfacher Webserver.
- *
- * Hostet Webfiles zum Abrufen für einen Browser.
- * Stellt über eine bestimmte URL eine REST-API zur Datenbank bereit
- * (GET, PUT, DELETE; Ergebnisse im JSON-Format).
- *
- */
-
 #include "network.h"
 
 #include <limits.h>
@@ -23,10 +14,9 @@
 #define HTTP_STATUS_METHOD_NOT_ALLOWED 405
 #define HTTP_STATUS_INTERNAL_SERVER_ERROR 500
 
-
-static const char* webfileDirectory = "../http/";
-static const char* indexWebfile = "index.html";
-static const char* storageUrl = "/storage/";
+#define WEB_ROOT_DIR "../http/"
+#define WEB_INDEX_FILE "index.html"
+#define STORAGE_URL "/storage/"
 
 
 typedef struct {

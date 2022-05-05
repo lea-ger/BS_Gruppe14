@@ -1,6 +1,16 @@
 #include "httpInterface.h"
 
 
+/*
+ * Ein einfacher Webserver.
+ *
+ * Hostet Webfiles zum Abrufen für einen Browser.
+ * Stellt über eine bestimmte URL eine REST-API zur Datenbank bereit
+ * (GET, PUT, DELETE; Ergebnisse im JSON-Format).
+ *
+ */
+
+
 /**
  * Erzeugt ein neues Objekt welches eine Http-Anfrage repräsentiert
  *
@@ -97,7 +107,7 @@ void httpRequestProcess (HttpRequest *request, HttpResponse *response)
 {
     // Zugriff auf die Datenbank
     // -------------------------
-    if (strncmp(request->url->cStr, storageUrl, strlen(storageUrl)) == 0) {
+    if (strncmp(request->url->cStr, STORAGE_URL, strlen(STORAGE_URL)) == 0) {
         if (!stringEquals(request->method, "GET") &&
             !stringEquals(request->method, "PUT") &&
             !stringEquals(request->method, "DELETE")) {
@@ -117,7 +127,7 @@ void httpRequestProcess (HttpRequest *request, HttpResponse *response)
             stringCut(cmd->name, 0, 3);
         }
         // "/storage/key" -> "key"
-        stringCut(cmd->key,strlen(storageUrl),
+        stringCut(cmd->key,strlen(STORAGE_URL),
                   stringLength(cmd->key));
 
         commandExecute(cmd);
@@ -194,7 +204,7 @@ void httpResponseFormateMessage (HttpResponse *response, String *responseMessage
  */
 void httpResponseLoadWebfile (HttpResponse *response, const char *url)
 {
-    String *path = stringCreate(webfileDirectory);
+    String *path = stringCreate(WEB_ROOT_DIR);
     stringAppend(path, url);
 
     if (!httpResponseCheckFilePath(response, path)) {
@@ -245,7 +255,7 @@ void httpResponseLoadWebfile (HttpResponse *response, const char *url)
  */
 bool httpResponseCheckFilePath (HttpResponse *response, String *path)
 {
-    char *realWebfileDirectory = realpath(webfileDirectory, NULL);
+    char *realWebfileDirectory = realpath(WEB_ROOT_DIR, NULL);
     char *realPath = realpath(path->cStr, NULL);
 
     struct stat pathStat;
@@ -283,7 +293,7 @@ bool httpResponseCheckFilePath (HttpResponse *response, String *path)
         }
 
         // Antworte mit der index-Datei des Verzeichnisses
-        stringAppend(path, indexWebfile);
+        stringAppend(path, WEB_INDEX_FILE);
     }
 
     free(realWebfileDirectory);
