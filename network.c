@@ -14,7 +14,7 @@ static const char *commandQuitName = "QUIT";
 SOCKET processSocket = 0;
 
 
-void initModulNetwork (bool httpInterface)
+void initModuleNetwork (bool httpInterface)
 {
     registerCommandEntry(commandQuitName, 0, false, eventCommandQuit);
 
@@ -27,7 +27,7 @@ void initModulNetwork (bool httpInterface)
 }
 
 
-void freeModulNetwork ()
+void freeModuleNetwork ()
 {
     if (processSocket != 0)
         close(processSocket);
@@ -46,27 +46,31 @@ void eventCommandQuit (Command *cmd)
  * Wenn die Puffergröße RECV_BUFFER_SIZE erreicht wurde aber die
  * Nachricht weder mit einer String-Terminierung noch einem Zeilenumbruch
  * endet wird davon ausgegangen das der Puffer überschritten wurde.
- * Dann ist der Rückgabewert größer als RECV_BUFFER_SIZE.
+ * Dann ist der Rückgabewert größer als RECV_BUFFER_SIZE. Bei vorhandener Termini
  *
  * @param socket - Verbindungs-Deskriptor
  * @param message - Eingangsnachricht
  */
-size_t receiveMessage (SOCKET socket, char *message)
+size_t receiveMessage (SOCKET socket, String *message)
 {
-    size_t size = recv(socket, message, RECV_BUFFER_SIZE, 0);
+    stringReserve(message, RECV_BUFFER_SIZE);
 
-    if (size == RECV_BUFFER_SIZE) {
-        char termSign = message[RECV_BUFFER_SIZE - 1];
-        if (termSign != '\0' && termSign != '\n')
-            return RECV_BUFFER_SIZE + 1;
-    }
-
+    size_t size = recv(socket, message->cStr, RECV_BUFFER_SIZE, 0);
     if (size < 0) {
         perror("receiveMessage recv");
     }
-    else {
-        message[size] = '\0';
+    if (size == RECV_BUFFER_SIZE) {
+        char termSign = message->cStr[size-1];
+        if (termSign != '\0' && termSign != '\n') {
+            message->length = size-1;
+            message->cStr[size] = '\0';
+            return RECV_BUFFER_SIZE+1;
+        }
     }
+
+    message->length = size;
+    message->cStr[size] = '\0';
+
     return size;
 }
 
@@ -163,7 +167,7 @@ void clientHandlerCommand (SOCKET socket)
     Command *cmd = commandCreate();
 
     do {
-        size_t size = receiveMessage(socket, buffer->cStr);
+        size_t size = receiveMessage(socket, buffer);
         if (size > RECV_BUFFER_SIZE) {
             const char *exceedMsg = "BUFFER_EXCEEDED\r\n";
             send(socket, exceedMsg, strlen(exceedMsg), 0);
@@ -201,7 +205,7 @@ void clientHandlerHttp (SOCKET socket) {
     HttpRequest *request = httpRequestCreate();
     HttpResponse *response = httpResponseCreate();
 
-    size_t size = receiveMessage(socket, buffer->cStr);
+    size_t size = receiveMessage(socket, buffer);
     if (size > RECV_BUFFER_SIZE) {
         response->statusCode = HTTP_STATUS_INTERNAL_SERVER_ERROR;
         httpResponseFormateMessage(response, buffer, &size);

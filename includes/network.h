@@ -1,11 +1,9 @@
 #ifndef SERVER_NETWORK_H
 #define SERVER_NETWORK_H
 
-
 #include "utils.h"
 #include "command.h"
 #include "httpInterface.h"
-#include "lock.h"
 
 #include <stdio.h>
 #include <sys/socket.h>
@@ -25,8 +23,8 @@
 extern SOCKET processSocket;
 
 
-void initModulNetwork (bool httpInterface);
-void freeModulNetwork ();
+void initModuleNetwork (bool httpInterface);
+void freeModuleNetwork ();
 
 void eventCommandQuit (Command *cmd);
 
@@ -34,7 +32,7 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
 void clientHandlerCommand (SOCKET socket);
 void clientHandlerHttp (SOCKET socket);
 
-size_t receiveMessage (SOCKET socket, char* message);
+size_t receiveMessage (SOCKET socket, String* message);
 
 
 #endif //SERVER_NETWORK_H

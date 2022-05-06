@@ -15,10 +15,10 @@
 // D.h. in diesem Fall, dass ein Client den Storage automatisch wieder freigibt,
 // wenn er sich im exklusiven Modus beendet.
 static int storageSemaphoreId = 0;
-static struct sembuf enterStorage = {0, -1, SEM_UNDO};
-static struct sembuf leaveStorage = {0, 1, SEM_UNDO};
-static struct sembuf enterReaderCounter = {1, -1, SEM_UNDO};
-static struct sembuf leaveReaderCounter = {1, 1, SEM_UNDO};
+static struct sembuf enterStorage = {.sem_num=0, .sem_op=-1, .sem_flg=SEM_UNDO};
+static struct sembuf leaveStorage = {.sem_num=0, .sem_op=1, .sem_flg=SEM_UNDO};
+static struct sembuf enterReaderCounter = {.sem_num=1, .sem_op=-1, .sem_flg=SEM_UNDO};
+static struct sembuf leaveReaderCounter = {.sem_num=1, .sem_op=1, .sem_flg=SEM_UNDO};
 
 static int shmReaderCounterId = 0;
 static int* readerCounter = NULL;
@@ -26,14 +26,14 @@ static int* readerCounter = NULL;
 static bool exclusiveMode = false;
 
 
-void initModulLock ()
+void initModuleLock ()
 {
     registerCommandEntry("BEG", 0, false, eventCommandBeginn);
     registerCommandEntry("END", 0, false, eventCommandEnd);
 
     shmReaderCounterId = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | SHM_R | SHM_W);
     if (shmReaderCounterId == -1) {
-        fatalError("initModulLock shmget");
+        fatalError("initModuleLock shmget");
     }
     readerCounter = shmat(shmReaderCounterId, NULL, 0);
     *readerCounter = 0;
@@ -41,7 +41,7 @@ void initModulLock ()
     unsigned short marker[2] = {1, 1};
     storageSemaphoreId = semget(IPC_PRIVATE, 2, IPC_CREAT | 0644);
     if (shmReaderCounterId == -1) {
-        fatalError("initModulLock semget");
+        fatalError("initModuleLock semget");
     }
     semctl(storageSemaphoreId, 1, SETALL, marker);
 
@@ -50,7 +50,7 @@ void initModulLock ()
 }
 
 
-void freeModulLock ()
+void freeModuleLock ()
 {
     semctl(storageSemaphoreId, 0, IPC_RMID);
 

@@ -1,14 +1,6 @@
 #ifndef SERVER_STORAGE_H
 #define SERVER_STORAGE_H
 
-#include "utils.h"
-#include "command.h"
-#include "lock.h"
-#include "newsletter.h"
-
-#include <stdio.h>
-#include <sys/shm.h>
-
 
 #define FILE_BUFFER_SIZE PAGE_SIZE
 
@@ -17,6 +9,15 @@
 #define STORAGE_ENTRY_SIZE 1024
 
 #define STORAGE_FILE "../data.csv"
+
+
+#include "utils.h"
+#include "command.h"
+#include "lock.h"
+#include "newsletter.h"
+
+#include <stdio.h>
+#include <sys/shm.h>
 
 
 typedef struct {
@@ -29,8 +30,8 @@ void eventCommandGet (Command *cmd);
 void eventCommandPut (Command *cmd);
 void eventCommandDel (Command *cmd);
 
-void initModulStorage (int snapshotInterval);
-void freeModulStorage ();
+void initModuleStorage (int snapshotInterval);
+void freeModuleStorage ();
 
 int findStorageRecord (const char* key);
 

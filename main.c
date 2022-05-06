@@ -15,23 +15,23 @@ static bool argSystemExec = true;
 
 static void initAllModules ()
 {
-    initModulCommand();
-    initModulLock();
-    initModulStorage(argSnapshotInterval);
-    if (argNewsletter) initModulNewsletter();
-    if (argSystemExec) initModulSystemExec();
-    initModulNetwork(argHttpInterface);
+    initModuleCommand();
+    initModuleLock();
+    initModuleStorage(argSnapshotInterval);
+    if (argNewsletter) initModuleNewsletter();
+    if (argSystemExec) initModuleSystemExec();
+    initModuleNetwork(argHttpInterface);
 }
 
 
 static void freeAllModules ()
 {
-    freeModulNetwork();
-    if (argSystemExec) freeModulSystemExec();
-    if (argNewsletter) freeModulNewsletter();
-    freeModulStorage();
-    freeModulLock();
-    freeModulCommand();
+    freeModuleNetwork();
+    if (argSystemExec) freeModuleSystemExec();
+    if (argNewsletter) freeModuleNewsletter();
+    freeModuleStorage();
+    freeModuleLock();
+    freeModuleCommand();
 }
 
 

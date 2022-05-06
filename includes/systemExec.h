@@ -13,8 +13,8 @@
 
 void eventCommandOperation (Command *cmd);
 
-void initModulSystemExec ();
-void freeModulSystemExec ();
+void initModuleSystemExec ();
+void freeModuleSystemExec ();
 
 bool executeOperation (const char *op, const char *input, String *output);
 

@@ -30,8 +30,8 @@ typedef struct {
 } ResponseRecord;
 
 
-void initModulCommand ();
-void freeModulCommand ();
+void initModuleCommand ();
+void freeModuleCommand ();
 
 CommandEntry* lookupCommandEntry (const char* name);
 bool registerCommandEntry (const char* name, int argc, bool wildcardKey, void (*callback)(Command*));

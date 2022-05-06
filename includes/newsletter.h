@@ -12,33 +12,38 @@
 
 #define NEWSLETTER_MAX_SUBS sizeof(RecordSubscriberMask) * 8
 
-#define NL_NOTIFY_PUT 0
-#define NL_NOTIFY_DEL 1
+#define NL_NOTIFICATION_SUB 0
+#define NL_NOTIFICATION_UNSUB 1
+#define NL_NOTIFICATION_PUT 2
+#define NL_NOTIFICATION_DEL 3
 
 typedef long RecordSubscriberMask;
 
-typedef struct
-{
-    long mtype;
-    char mtext[64 + 256 + 7]; // FIXME
+typedef struct {
+    int notification;
+    char key[STORAGE_KEY_SIZE];
+    char value[STORAGE_VALUE_SIZE];
+} Newsletter;
+
+typedef struct {
+    RecordSubscriberMask subscriberId;
+    Newsletter newsletter;
 } MsqBuffer;
 
 
 void eventCommandSubscribe (Command *cmd);
 
-void initModulNewsletter ();
-void freeModulNewsletter ();
+void initModuleNewsletter ();
+void freeModuleNewsletter ();
 
-int subscribeStorageRecord (const char* recordKey);
-int unsubscribeStorageRecord (const char* recordKey);
-int subscribeStorageRecordWithIndex (int recordIndex);
-int unsubscribeStorageRecordWithIndex (int recordIndex);
+int subscribeStorageRecord (const char* key);
 
-void notifyNewsletter (int cmdId, int index, const char* key, const char* value);
+void notifyAllObservers (int notificationId, int recordIndex, const char* key, const char* value);
 
-void runSocketForwarder ();
 bool takeSubscriberId ();
 void releaseSubscriberId ();
+void runStorageObserver ();
+void cleanupStorageObserver ();
 
 
 #endif //SERVER_NEWSLETTER_H

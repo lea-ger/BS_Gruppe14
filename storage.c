@@ -19,7 +19,7 @@ static int *storageEndIndex = NULL;
 const static char* keyDeletedMsg = "key_deleted";
 
 
-void initModulStorage (int snapshotInterval)
+void initModuleStorage (int snapshotInterval)
 {
     registerCommandEntry("GET", 1, true, eventCommandGet);
     registerCommandEntry("PUT", 2, false, eventCommandPut);
@@ -30,7 +30,7 @@ void initModulStorage (int snapshotInterval)
     // Erzeugt ein neues Shared-Memory-Segment
     shmStorageSegmentId = shmget(IPC_PRIVATE, storageSegmentSize, IPC_CREAT | SHM_R | SHM_W);
     if (shmStorageSegmentId == -1) {
-        fatalError("initModulStorage shmget");
+        fatalError("initModuleStorage shmget");
     }
     printf("Storage shared memory segment created (Id %d).\n", shmStorageSegmentId);
 
@@ -54,7 +54,7 @@ void initModulStorage (int snapshotInterval)
 }
 
 
-void freeModulStorage ()
+void freeModuleStorage ()
 {
     if (saveStorageToFile()) {
         printf("Storage data saved to file.\n");
@@ -184,7 +184,7 @@ int putStorageRecord (const char* key, const char* value)
     // Sucht nach existierenden Einträgen
     int index = findStorageRecord(key);
     if (index != -1) {
-        notifyNewsletter(NL_NOTIFY_PUT, index, key, value);
+        notifyAllObservers(NL_NOTIFICATION_PUT, index, key, value);
 
         strncpy(storage[index].value, value, STORAGE_VALUE_SIZE);
 
@@ -222,7 +222,7 @@ bool deleteStorageRecord (const char* key)
 
     int index = findStorageRecord(key);
     if (index != -1) {
-        notifyNewsletter(NL_NOTIFY_DEL, index, storage[index].key, keyDeletedMsg);
+        notifyAllObservers(NL_NOTIFICATION_DEL, index, storage[index].key, keyDeletedMsg);
 
         *storage[index].key = '\0';
 
@@ -274,7 +274,7 @@ void deleteMultipleStorageRecords (const char* wildcardKey, Array* result)
                  strMatchWildcard(storage[i].key, wildcardKey)) {
             responseRecordsAdd(result, storage[i].key, keyDeletedMsg);
 
-            notifyNewsletter(NL_NOTIFY_DEL, i, storage[i].key, keyDeletedMsg);
+            notifyAllObservers(NL_NOTIFICATION_DEL, i, storage[i].key, keyDeletedMsg);
 
             strcpy(storage[i].key, "");
         }

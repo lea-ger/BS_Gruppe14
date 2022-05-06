@@ -101,6 +101,8 @@ void stringFree (String *str)
  */
 void stringReserve (String *str, size_t capacity)
 {
+    if (capacity == str->capacity) return;
+
     str->cStr = realloc(str->cStr, (capacity+1) * sizeof(char));
     str->cStr[capacity] = '\0';
     str->capacity = capacity;

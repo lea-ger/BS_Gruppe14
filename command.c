@@ -13,13 +13,13 @@
 static Array /* CommandEntry */ *commandTable = NULL;
 
 
-void initModulCommand ()
+void initModuleCommand ()
 {
     commandTable = arrayCreate();
 }
 
 
-void freeModulCommand ()
+void freeModuleCommand ()
 {
     freeCommandTable();
     arrayFree(commandTable);

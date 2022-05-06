@@ -1,52 +1,53 @@
+#include <wait.h>
 #include "newsletter.h"
 
 
 // FIXME PLAYGROUND-STATUS!!!
 
 
-int socketForwarderPid = 0;
-RecordSubscriberMask subscriberId = 0;
-int subscriptionCounter = 0;
+static int observerPid = 0;
+static RecordSubscriberMask subscriberId = 0;
+static int subscriptionCounter = 0;
 
-int shmStorageSegmentId = 0;
-RecordSubscriberMask *usedSubscriberIds = NULL;
-RecordSubscriberMask *subscribers = NULL;
+static int shmNewsletterSegmentId = 0;
+static RecordSubscriberMask *subscriberRegistry = NULL;
+static RecordSubscriberMask *subscribers = NULL;
 
-int msqId = 0;
+static int msqNotifierId = 0;
 
 
-void initModulNewsletter ()
+void initModuleNewsletter ()
 {
     registerCommandEntry("SUB", 1, false, eventCommandSubscribe);
 
     int segmentSize = sizeof(RecordSubscriberMask) * STORAGE_ENTRY_SIZE + 1;
 
-    shmStorageSegmentId = shmget(IPC_PRIVATE, segmentSize, IPC_CREAT | SHM_R | SHM_W);
-    if (shmStorageSegmentId == -1) {
-        fatalError("shmget");
+    shmNewsletterSegmentId = shmget(IPC_PRIVATE, segmentSize, IPC_CREAT | SHM_R | SHM_W);
+    if (shmNewsletterSegmentId == -1) {
+        fatalError("initModuleNewsletter shmget");
     }
-    printf("Newsletter shared memory segment created (Id %d).\n", shmStorageSegmentId);
+    printf("Newsletter shared memory segment created (Id %d).\n", shmNewsletterSegmentId);
 
     // Hängt das Shared-Memory-Segment in den lokalen Adressenraum ein
     // (Das Einhängen wird beim Erzeugen von Kind-Prozessen vererbt)
-    usedSubscriberIds = shmat(shmStorageSegmentId, NULL, 0);
-    subscribers = &usedSubscriberIds[1];
-    memset(usedSubscriberIds, 0, segmentSize);
+    subscriberRegistry = shmat(shmNewsletterSegmentId, NULL, 0);
+    subscribers = &subscriberRegistry[1];
+    memset(subscriberRegistry, 0, segmentSize);
 
-    msqId = msgget(42, IPC_CREAT | 0666);
+    msqNotifierId = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
 }
 
 
-void freeModulNewsletter ()
+void freeModuleNewsletter ()
 {
-    msgctl(msqId, IPC_RMID, NULL);
+    msgctl(msqNotifierId, IPC_RMID, NULL);
 
     // Hängt das Shared-Memory-Segment aus dem lokalen Adressenraum aus
     shmdt(subscribers);
     // Löscht das Shared-Memory-Segment
-    shmctl(shmStorageSegmentId, IPC_RMID, NULL);
+    shmctl(shmNewsletterSegmentId, IPC_RMID, NULL);
 
-    printf("Newsletter shared memory segment created (Id %d).\n", shmStorageSegmentId);
+    printf("Newsletter shared memory segment created (Id %d).\n", shmNewsletterSegmentId);
 }
 
 
@@ -64,83 +65,61 @@ void eventCommandSubscribe (Command *cmd)
 }
 
 
-int subscribeStorageRecord (const char* recordKey)
+int subscribeStorageRecord (const char* key)
 {
-    enterCriticalSection(READ_ACCESS);
-    int index = findStorageRecord(recordKey);
-    if (index == -1) return 3; // key_nonexistent
-    int response = subscribeStorageRecordWithIndex(index);
-    leaveCriticalSection(READ_ACCESS);
+    //enterCriticalSection(READ_ACCESS);
+    int recordIndex = findStorageRecord(key);
+    if (recordIndex == -1) return 3; // key_nonexistent
 
-    return response;
-}
-
-
-int unsubscribeStorageRecord (const char* recordKey)
-{
-    enterCriticalSection(READ_ACCESS);
-    int index = findStorageRecord(recordKey);
-    if (index == -1) return 3; // key_nonexistent
-    int response = unsubscribeStorageRecordWithIndex(index);
-    leaveCriticalSection(READ_ACCESS);
-
-    return response;
-}
-
-
-int subscribeStorageRecordWithIndex (int recordIndex)
-{
-    if (subscriptionCounter == 0 && !takeSubscriberId()) {
+    if (subscriberId == 0 && !takeSubscriberId()) {
         return 2; // subscribers_full
     }
-
-    RecordSubscriberMask *subMask = &subscribers[recordIndex];
-
-    if (subscriberId & *subMask) {
+    if (subscriberId & subscribers[recordIndex]) {
         return 1; // already_subscribed
     }
 
-    *subMask |= subscriberId;
-    subscriptionCounter++;
+    subscribers[recordIndex] |= subscriberId;
+
+    MsqBuffer msqBuffer = {.subscriberId=subscriberId,.newsletter={.notification=NL_NOTIFICATION_SUB}};
+    if (msgsnd(msqNotifierId, &msqBuffer, sizeof(Newsletter), 0) < 0) {
+        perror("subscribeStorageRecord msgsnd");
+    }
+
+    //leaveCriticalSection(READ_ACCESS);
 
     return 0; // subscribed
 }
 
 
-int unsubscribeStorageRecordWithIndex (int recordIndex)
+void notifyAllObservers (int notificationId, int recordIndex, const char* key, const char* value)
 {
-    subscribers[recordIndex] &= ~subscriberId;
-    subscriptionCounter--;
-    if (subscriptionCounter == 0) {
-        kill(socketForwarderPid, SIGKILL);
-        socketForwarderPid = 0;
-    }
-}
-
-
-void notifyNewsletter (int cmdId, int index, const char* key, const char* value)
-{
-    if (shmStorageSegmentId == 0) return;
-
-    const char *cmdName = (cmdId == NL_NOTIFY_PUT) ? "PUT" : "DEL";
-    RecordSubscriberMask *recordSubMask = &subscribers[index];
-
-    // FIXME format nicht hier
-    String *message = stringCreateWithFormat("%s:%s:%s\n",
-                                         cmdName, key, value);
+    if (shmNewsletterSegmentId == 0) return; // Modul nicht initialisiert
+    
     MsqBuffer msqBuffer;
-    strcpy(msqBuffer.mtext, message->cStr);
-    stringFree(message);
+    msqBuffer.newsletter.notification = notificationId;
+    strcpy(msqBuffer.newsletter.key, key);
+    strcpy(msqBuffer.newsletter.value, value);
 
     for (int i = 0; i < NEWSLETTER_MAX_SUBS; i++) {
-        msqBuffer.mtype = (*recordSubMask)>>i & 1;
+        msqBuffer.subscriberId = subscribers[recordIndex] & ((RecordSubscriberMask)1 << i);
 
-        if (msqBuffer.mtype && !(*recordSubMask & subscriberId)) {
-            if (msgsnd(msqId, &msqBuffer, sizeof(MsqBuffer), 0)) {
-                perror("msgsnd");
+        if (msqBuffer.subscriberId != 0) {
+            if (notificationId == NL_NOTIFICATION_DEL) {
+                subscribers[recordIndex] &= ~msqBuffer.subscriberId;
+
+                // Wenn der Subscriber selbst einen seiner beobachteten Einträge löscht,
+                // soll er keine DEL Notification bekommen, aber der Observer muss trotzdem
+                // den subscriptionCounter herunterzählen. Wandelt deshalb die DEL- in eine UNSUB
+                // Notification um.
+                if (msqBuffer.subscriberId == subscriberId) {
+                    msqBuffer.newsletter.notification = NL_NOTIFICATION_UNSUB;
+                }
+            } else if (msqBuffer.subscriberId == subscriberId) {
+                continue;
             }
-            if (cmdId == NL_NOTIFY_DEL) {
-                unsubscribeStorageRecordWithIndex(i);
+
+            if (msgsnd(msqNotifierId, &msqBuffer, sizeof(Newsletter), 0) < 0) {
+                perror("notifyAllObservers msgsnd");
             }
         }
     }
@@ -149,21 +128,22 @@ void notifyNewsletter (int cmdId, int index, const char* key, const char* value)
 
 bool takeSubscriberId ()
 {
-    // Wahr wenn alle Bits auf 1 stehen / kein freier Platz vorhanden ist
-    if (!~*usedSubscriberIds) {
+    // Wahr wenn alle Bits auf 1 stehen / keine Id mehr frei ist
+    if (!~*subscriberRegistry) {
         return false;
     }
-    // Setzte subscriberId auf das erste freie Bit in usedSubscriberIds
-    for (subscriberId = 1; subscriberId & *usedSubscriberIds; subscriberId <<= 1);
-    // Trägt das subscriberId-Bit in usedSubscriberIds ein
-    *usedSubscriberIds |= subscriberId;
+    // Setzte subscriberId auf das erste freie Bit in subscriberRegistry
+    for (subscriberId = 1; subscriberId & *subscriberRegistry; subscriberId <<= 1);
+    // Trägt das subscriberId-Bit in subscriberRegistry ein
+    *subscriberRegistry |= subscriberId;
 
-    socketForwarderPid = fork();
-    if (socketForwarderPid == 0) {
+    signal(SIGCHLD, cleanupStorageObserver);
+    observerPid = fork();
+    if (observerPid == 0) {
         prctl(PR_SET_NAME, (unsigned long)"kvsvr(sub)");
         prctl(PR_SET_PDEATHSIG, SIGTERM);
         signal(SIGTERM, releaseSubscriberId);
-        runSocketForwarder();
+        runStorageObserver();
 
         exit(EXIT_SUCCESS);
     }
@@ -173,35 +153,84 @@ bool takeSubscriberId ()
 
 void releaseSubscriberId ()
 {
+    // Wahr, wenn die Subscriber-Id nicht registriert ist
+    if (!(*subscriberRegistry & subscriberId)) return;
+
+    *subscriberRegistry &= ~subscriberId;
+
     if (subscriptionCounter > 0) {
+        // Entfernt alle verbleibenden Subscriptions aus der Tabelle
         for (int i = 0; i < STORAGE_ENTRY_SIZE; i++) {
             subscribers[i] &= ~subscriberId;
         }
     }
-    subscriptionCounter = 0;
-    *usedSubscriberIds &= ~subscriberId;
-    subscriberId = 0;
+
+    // Entferne mögliche nicht abgeholte Nachrichten aus der Warteschlange
+    MsqBuffer msgBuffer;
+    while (msgrcv(msqNotifierId, &msgBuffer, sizeof(MsqBuffer),
+                  subscriberId, IPC_NOWAIT) > 0);
 }
 
 
-void runSocketForwarder ()
+void runStorageObserver ()
 {
+    MsqBuffer msqBuffer;
     String *message = stringCreate("");
-    MsqBuffer msgBuffer;
+    Command *command = commandCreate();
 
-    for (;;) {
-        int v = msgrcv(msqId, &msgBuffer, sizeof(MsqBuffer),
-                       subscriberId, 0);
-        if (v == -1) {
-            perror("runSocketForwarder msgrcv");
+    do {
+        size_t response = msgrcv(msqNotifierId, &msqBuffer, sizeof(Newsletter),
+                                 subscriberId, 0);
+        if (response == -1) {
+            if (errno != EINTR) {
+                perror("runStorageObserver msgrcv");
+            }
             return;
         }
-        else {
-            printf("send");
-            send(processSocket, msgBuffer.mtext, strlen(msgBuffer.mtext), 0);
-        }
-    }
 
-    // stringFree(message);
+        const char *commandName = "";
+        switch (msqBuffer.newsletter.notification) {
+            case NL_NOTIFICATION_SUB:
+                subscriptionCounter++;
+                break;
+            case NL_NOTIFICATION_DEL:
+                commandName = "DEL";
+            case NL_NOTIFICATION_UNSUB:
+                subscriptionCounter--;
+                break;
+            case NL_NOTIFICATION_PUT:
+                commandName = "PUT";
+        }
+
+        if (*commandName != '\0') {
+            stringCopy(command->name, commandName);
+            stringCopy(command->key, msqBuffer.newsletter.key);
+            stringCopy(command->value, msqBuffer.newsletter.value);
+            responseRecordsFree(command->responseRecords);
+            responseRecordsAdd(command->responseRecords,
+                               command->key->cStr, command->value->cStr);
+
+            commandFormatResponseMessage(command, message);
+
+            response = send(processSocket, message->cStr, stringLength(message), 0);
+            if (response == -1) {
+                perror("runStorageObserver send");
+                return;
+            }
+        }
+    } while (subscriptionCounter > 0);
+
+    stringFree(message);
+    commandFree(command);
+}
+
+
+void cleanupStorageObserver ()
+{
+    int pid = wait(NULL);
+    if (pid == observerPid) {
+        observerPid = 0;
+        subscriberId = 0;
+    }
 }
 

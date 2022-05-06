@@ -2,91 +2,106 @@
 #include "systemExec.h"
 
 
-// FIXME PLAYGROUND-STATUS!!!
+/*
+ * System-Program Executor
+ *
+ * Nimmt Storage-Einträge als Ein-/Ausgabe für
+ * eine Systemanwendung (z.B. "date" oder der Taschenrechner "bc").
+ *
+ */
 
 
-void initModulSystemExec ()
+void initModuleSystemExec ()
 {
     registerCommandEntry("OP", 2, false, eventCommandOperation);
 }
 
 
-void freeModulSystemExec ()
+void freeModuleSystemExec ()
 {
 }
 
 
 void eventCommandOperation (Command *cmd)
 {
-    const char *key = cmd->key->cStr;
-    const char *operation = cmd->value->cStr;
-
     String *inputBuffer = stringCreate("");
     String *outputBuffer = stringCreate("");
 
-    getStorageRecord(key, inputBuffer);
+    getStorageRecord(cmd->key->cStr, inputBuffer);
 
-    bool success = executeOperation(operation, inputBuffer->cStr, outputBuffer);
+    bool success = executeOperation(cmd->value->cStr,
+                                    inputBuffer->cStr, outputBuffer);
     stringCopy(cmd->responseMessage, (success) ? "op_successful" : "op_failed");
 
     if (!stringIsEmpty(outputBuffer)) {
-        putStorageRecord(key, outputBuffer->cStr);
+        putStorageRecord(cmd->key->cStr, outputBuffer->cStr);
     }
+
+    stringFree(outputBuffer);
+    stringFree(inputBuffer);
 }
 
 
-// FIXME Syntaxerror?!
-// put calc 5+5
-// op calc bc
 bool executeOperation (const char *op, const char* input, String *output)
 {
+    // Lazier version
+#if 0
+    String *pipedCommand = stringCreateWithFormat("echo \"%s\" | %s", input, op);
+
+    FILE *pFile = popen(pipedCommand->cStr, "r");
+    fgets(output->cStr, PIPE_BUFFER_SIZE, pFile);
+    pclose(pFile);
+
+    stringTrimSpaces(output);
+    stringFree(pipedCommand);
+#endif
+
     stringReserve(output, PIPE_BUFFER_SIZE);
 
+    // Erstelle 2 neue Pipes
     int inputPipe[2], outputPipe[2];
-
     pipe(inputPipe);
     pipe(outputPipe);
 
     signal(SIGCHLD, SIG_DFL);
-    int execPid = fork();
 
+    // Erzeugt einen neuen Prozess, verbindet die Standard Ein-/Ausgabe mit den Pipes
+    // und ersetzt den Programmcode des Prozesses / führt ein anderes Programm aus.
+    int execPid = fork();
     if (execPid == 0) {
-        //close(inputPipe[1]);
-        //close(outputPipe[0]);
+        // Schliesst die Pipe-Seiten die vom Eltern-Prozess benutzt werden
+        close(inputPipe[1]);
+        close(outputPipe[0]);
 
         dup2(inputPipe[0], STDIN_FILENO);
         dup2(outputPipe[1], STDOUT_FILENO);
-        //dup2(outputPipe[1], STDERR_FILENO);
+        dup2(outputPipe[1], STDERR_FILENO);
 
-        //prctl(PR_SET_PDEATHSIG, SIGTERM);
-
-        execl("/bin/sh", op, "-c", op, NULL);
+        execl("/bin/sh", "sh", "-c", op, NULL);
 
         exit(EXIT_FAILURE);
     }
 
+    // Schliesst die Pipe-Seiten die vom Kind-Prozess benutzt werden
     close(inputPipe[0]);
     close(outputPipe[1]);
 
-    //FILE* fhWrite = fdopen(inputPipe[1], "w");
-    //FILE* fhRead = fdopen(outputPipe[0], "r");
+    // Erzeugt Streams für die Deskriptor
+    FILE* fhWrite = fdopen(inputPipe[1], "w");
+    FILE* fhRead = fdopen(outputPipe[0], "r");
 
-    //fwrite(input, strlen(input), 1, fhWrite);
-    //fclose(fhWrite);
+    fprintf(fhWrite, "%s\n", input);
+    fclose(fhWrite);
 
-    //fgets(output->cStr, PIPE_BUFFER_SIZE, fhRead);
-    //fclose(fhRead);
+    fgets(output->cStr, PIPE_BUFFER_SIZE, fhRead);
+    fclose(fhRead);
 
     stringTrimSpaces(output);
 
-    write(inputPipe[1], input, strlen(input));
-    read(outputPipe[0], output->cStr, PIPE_BUFFER_SIZE);
-
+    // Warte auf den exit-Status des Programms
     int status;
     waitpid(execPid, &status, 0);
-
     signal(SIGCHLD, SIG_IGN);
-
     if (WIFEXITED(status)) {
         return WEXITSTATUS(status) == 0;
     }

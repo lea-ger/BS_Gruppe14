@@ -1,7 +1,8 @@
 #ifndef SERVER_HTTPINTERFACE_H
 #define SERVER_HTTPINTERFACE_H
 
-#include "network.h"
+#include "utils.h"
+#include "command.h"
 
 #include <limits.h>
 #include <sys/types.h>

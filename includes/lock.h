@@ -16,8 +16,8 @@
 void eventCommandBeginn (Command *cmd);
 void eventCommandEnd (Command *cmd);
 
-void initModulLock ();
-void freeModulLock ();
+void initModuleLock ();
+void freeModuleLock ();
 
 void enterCriticalSection (int accessType);
 void leaveCriticalSection (int accessType);
