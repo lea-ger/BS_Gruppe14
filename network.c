@@ -134,6 +134,7 @@ void runServerLoop (const char* name, int port, void (*clientHandler)(SOCKET soc
         if (fork() == 0) {
             signal(SIGINT, SIG_DFL);
             signal(SIGTERM, SIG_DFL);
+            signal(SIGCHLD, SIG_DFL);
             close(processSocket);
 
             processSocket = clientSocket;

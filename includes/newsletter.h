@@ -36,13 +36,13 @@ void eventCommandSubscribe (Command *cmd);
 void initModuleNewsletter ();
 void freeModuleNewsletter ();
 
-int subscribeStorageRecord (const char* key);
-
 void notifyAllObservers (int notificationId, int recordIndex, const char* key, const char* value);
 
+int subscribeStorageRecord (const char* key);
 bool takeSubscriberId ();
-void releaseSubscriberId ();
+
 void runStorageObserver ();
+void releaseSubscriberId ();
 void cleanupStorageObserver ();
 
 

@@ -7,7 +7,6 @@
 
 static int observerPid = 0;
 static RecordSubscriberMask subscriberId = 0;
-static int subscriptionCounter = 0;
 
 static int shmNewsletterSegmentId = 0;
 static RecordSubscriberMask *subscriberRegistry = NULL;
@@ -65,32 +64,13 @@ void eventCommandSubscribe (Command *cmd)
 }
 
 
-int subscribeStorageRecord (const char* key)
-{
-    //enterCriticalSection(READ_ACCESS);
-    int recordIndex = findStorageRecord(key);
-    if (recordIndex == -1) return 3; // key_nonexistent
-
-    if (subscriberId == 0 && !takeSubscriberId()) {
-        return 2; // subscribers_full
-    }
-    if (subscriberId & subscribers[recordIndex]) {
-        return 1; // already_subscribed
-    }
-
-    subscribers[recordIndex] |= subscriberId;
-
-    MsqBuffer msqBuffer = {.subscriberId=subscriberId,.newsletter={.notification=NL_NOTIFICATION_SUB}};
-    if (msgsnd(msqNotifierId, &msqBuffer, sizeof(Newsletter), 0) < 0) {
-        perror("subscribeStorageRecord msgsnd");
-    }
-
-    //leaveCriticalSection(READ_ACCESS);
-
-    return 0; // subscribed
-}
-
-
+/**
+ *
+ * @param notificationId
+ * @param recordIndex
+ * @param key
+ * @param value
+ */
 void notifyAllObservers (int notificationId, int recordIndex, const char* key, const char* value)
 {
     if (shmNewsletterSegmentId == 0) return; // Modul nicht initialisiert
@@ -126,6 +106,32 @@ void notifyAllObservers (int notificationId, int recordIndex, const char* key, c
 }
 
 
+int subscribeStorageRecord (const char* key)
+{
+    //enterCriticalSection(READ_ACCESS);
+    int recordIndex = findStorageRecord(key);
+    if (recordIndex == -1) return 3; // key_nonexistent
+
+    if (subscriberId == 0 && !takeSubscriberId()) {
+        return 2; // subscribers_full
+    }
+    if (subscriberId & subscribers[recordIndex]) {
+        return 1; // already_subscribed
+    }
+
+    subscribers[recordIndex] |= subscriberId;
+
+    MsqBuffer msqBuffer = {.subscriberId=subscriberId,.newsletter={.notification=NL_NOTIFICATION_SUB}};
+    if (msgsnd(msqNotifierId, &msqBuffer, sizeof(Newsletter), 0) < 0) {
+        perror("subscribeStorageRecord msgsnd");
+    }
+
+    //leaveCriticalSection(READ_ACCESS);
+
+    return 0; // subscribed
+}
+
+
 bool takeSubscriberId ()
 {
     // Wahr wenn alle Bits auf 1 stehen / keine Id mehr frei ist
@@ -151,25 +157,7 @@ bool takeSubscriberId ()
 }
 
 
-void releaseSubscriberId ()
-{
-    // Wahr, wenn die Subscriber-Id nicht registriert ist
-    if (!(*subscriberRegistry & subscriberId)) return;
-
-    *subscriberRegistry &= ~subscriberId;
-
-    if (subscriptionCounter > 0) {
-        // Entfernt alle verbleibenden Subscriptions aus der Tabelle
-        for (int i = 0; i < STORAGE_ENTRY_SIZE; i++) {
-            subscribers[i] &= ~subscriberId;
-        }
-    }
-
-    // Entferne mögliche nicht abgeholte Nachrichten aus der Warteschlange
-    MsqBuffer msgBuffer;
-    while (msgrcv(msqNotifierId, &msgBuffer, sizeof(MsqBuffer),
-                  subscriberId, IPC_NOWAIT) > 0);
-}
+static int subscriptionCounter = 0;
 
 
 void runStorageObserver ()
@@ -225,10 +213,30 @@ void runStorageObserver ()
 }
 
 
+void releaseSubscriberId ()
+{
+    // Wahr, wenn die Subscriber-Id nicht registriert ist
+    if (!(*subscriberRegistry & subscriberId)) return;
+
+    *subscriberRegistry &= ~subscriberId;
+
+    if (subscriptionCounter > 0) {
+        // Entfernt alle verbleibenden Subscriptions aus der Tabelle
+        for (int i = 0; i < STORAGE_ENTRY_SIZE; i++) {
+            subscribers[i] &= ~subscriberId;
+        }
+    }
+
+    // Entferne mögliche nicht abgeholte Nachrichten aus der Warteschlange
+    MsqBuffer msgBuffer;
+    while (msgrcv(msqNotifierId, &msgBuffer, sizeof(MsqBuffer),
+                  subscriberId, IPC_NOWAIT) > 0);
+}
+
+
 void cleanupStorageObserver ()
 {
-    int pid = wait(NULL);
-    if (pid == observerPid) {
+    if (waitpid(observerPid, NULL, 0) > 0) {
         observerPid = 0;
         subscriberId = 0;
     }

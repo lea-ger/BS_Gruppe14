@@ -63,8 +63,6 @@ bool executeOperation (const char *op, const char* input, String *output)
     pipe(inputPipe);
     pipe(outputPipe);
 
-    signal(SIGCHLD, SIG_DFL);
-
     // Erzeugt einen neuen Prozess, verbindet die Standard Ein-/Ausgabe mit den Pipes
     // und ersetzt den Programmcode des Prozesses / führt ein anderes Programm aus.
     int execPid = fork();
@@ -75,7 +73,7 @@ bool executeOperation (const char *op, const char* input, String *output)
 
         dup2(inputPipe[0], STDIN_FILENO);
         dup2(outputPipe[1], STDOUT_FILENO);
-        dup2(outputPipe[1], STDERR_FILENO);
+        //dup2(outputPipe[1], STDERR_FILENO);
 
         execl("/bin/sh", "sh", "-c", op, NULL);
 
@@ -86,22 +84,22 @@ bool executeOperation (const char *op, const char* input, String *output)
     close(inputPipe[0]);
     close(outputPipe[1]);
 
-    // Erzeugt Streams für die Deskriptor
-    FILE* fhWrite = fdopen(inputPipe[1], "w");
-    FILE* fhRead = fdopen(outputPipe[0], "r");
+    write(inputPipe[1], input, strlen(input));
+    write(inputPipe[1], "\n", 1);
+    close(inputPipe[1]);
 
-    fprintf(fhWrite, "%s\n", input);
-    fclose(fhWrite);
-
-    fgets(output->cStr, PIPE_BUFFER_SIZE, fhRead);
-    fclose(fhRead);
-
-    stringTrimSpaces(output);
+    for (int i = 0; i < PIPE_BUFFER_SIZE; i++) {
+        read(outputPipe[0], &output->cStr[i], 1);
+        if (output->cStr[i] == '\n') {
+            output->cStr[i] = '\0';
+            break;
+        }
+    }
+    close(outputPipe[0]);
 
     // Warte auf den exit-Status des Programms
     int status;
-    waitpid(execPid, &status, 0);
-    signal(SIGCHLD, SIG_IGN);
+    while (waitpid(execPid, &status, 0) <= 0);
     if (WIFEXITED(status)) {
         return WEXITSTATUS(status) == 0;
     }
