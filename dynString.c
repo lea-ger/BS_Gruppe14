@@ -87,6 +87,8 @@ String* stringCreateWithFormat (const char *format, ...)
  */
 void stringFree (String *str)
 {
+    if (str == NULL) return;
+
     free(str->cStr);
     free(str);
 }
@@ -470,13 +472,13 @@ int strMatchAnyChar (const char* str, const char *match, int charGroup)
 }
 
 
-// Kryptische Original-Version: https://www.ioccc.org/2001/schweikh.c
+// "One-Liner Challenge" Original-Version: https://www.ioccc.org/2001/schweikh.c
 bool strMatchWildcard (const char *str, const char *wildcard)
 {
     if (*wildcard == '*') {
         // Wenn der Wildcard-Ausdruck mit einem '*' endet, ist
         // jedes weitere Zeichen im String immer ein Match
-        if (*(wildcard+1) == '\0' ||
+        if (wildcard[1] == '\0' ||
                 // '*' ist nichts im String (oder wurde bereits übersprungen)
                 strMatchWildcard(str, wildcard+1) ||
                 // '*' ist ein (oder mehrere) Zeichen im String

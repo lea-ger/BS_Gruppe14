@@ -46,35 +46,11 @@ Array* arrayCreate ()
  * @param size - Anzahl der Elemente in cArr
  * @param cArr - Initialisierungswerte
  */
-Array* arrayCreateWithArray (size_t size, void* cArr[])
+Array* arrayCreateWithCArray (size_t size, void* cArr[])
 {
     Array *arr = arrayCreateWithCapacity(size);
     memcpy(arr->cArr, cArr, size * sizeof(void*));
-    return arr;
-}
-
-
-/**
- * Erzeugt ein neues Array auf dem Heap-Speicher und initialisiert es
- * mit den Funktions-Argumenten.
- *
- * @param size - Anzahl der Initialisierungswerte
- * @param ... - Initialisierungswerte
- */
-Array* arrayCreateWithArguments (size_t size, ...)
-{
-    Array *arr = arrayCreateWithCapacity(size);
     arr->size = size;
-
-    va_list vaList;
-
-    va_start(vaList, size);
-    for (int i = 0; i < size; i++) {
-        void *ptr = va_arg(vaList, void*);
-        arr->cArr[i] = ptr;
-    }
-    va_end(vaList);
-
     return arr;
 }
 
@@ -86,6 +62,8 @@ Array* arrayCreateWithArguments (size_t size, ...)
  */
 void arrayFree (Array *arr)
 {
+    if (arr == NULL) return;
+
     free(arr->cArr);
     free(arr);
 }

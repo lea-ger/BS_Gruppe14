@@ -140,7 +140,7 @@ void httpRequestProcess (HttpRequest *request, HttpResponse *response)
         httpResponseAttributeAdd(response, "Content-Type: application/json");
         return;
     }
-    // Zugriff auf das Webfile-Verzeichnis
+    // Zugriff auf das Webroot-Verzeichnis
     // -----------------------------------
     if (!stringEquals(request->method, "GET")) {
         response->statusCode = HTTP_STATUS_METHOD_NOT_ALLOWED;
@@ -178,14 +178,13 @@ void httpResponseFormateMessage (HttpResponse *response, String *responseMessage
         httpResponseAttributeAdd(response, "Content-Type: text/html");
     }
 
-    stringAppendFormat(responseMessage, "Content-Length: %d\r\n", response->payloadSize);
-
     for (int i = 0; i < response->attributes->size; i++) {
         String *attribut = response->attributes->cArr[i];
         stringAppend(responseMessage, attribut->cStr);
         stringAppend(responseMessage, "\r\n");
     }
-    stringAppend(responseMessage, "\r\n");
+
+    stringAppendFormat(responseMessage, "Content-Length: %d\r\n\r\n", response->payloadSize);
 
     *responseMessageSize = stringLength(responseMessage) + response->payloadSize;
 
@@ -247,7 +246,7 @@ void httpResponseLoadWebfile (HttpResponse *response, const char *url)
 
 /**
  * Prüft einen Dateipfad. Ist wahr wenn der Pfad zu einer existierenden Datei
- * innerhalb des Webfile-Verzeichnisses führt (ggf. wird 'path' dabei verändert).
+ * innerhalb des Webroot-Verzeichnisses führt (ggf. wird 'path' dabei verändert).
  * Anderenfalls wird der Fehlerstatus im Http-Response-Objekts gesetzt.
  *
  * @param response - Zielobjekt
@@ -255,19 +254,19 @@ void httpResponseLoadWebfile (HttpResponse *response, const char *url)
  */
 bool httpResponseCheckFilePath (HttpResponse *response, String *path)
 {
-    char *realWebfileDirectory = realpath(WEB_ROOT_DIR, NULL);
+    char *realWebrootDirectory = realpath(WEB_ROOT_DIR, NULL);
     char *realPath = realpath(path->cStr, NULL);
 
     struct stat pathStat;
     if (realPath) stat(realPath, &pathStat);
 
-    // Pfad existiert nicht (evtl. einschliesslich Webfile-Verzeichnis).
-    if ((realWebfileDirectory == NULL || realPath == NULL) ||
-    // Pfad befindet sich ausserhalb des Webfile-Verzeichnisses (z.B. durch "..")
-        strncmp(realWebfileDirectory, realPath, strlen(realWebfileDirectory)) != 0) {
+    // Pfad existiert nicht (evtl. einschliesslich Webroot-Verzeichnis).
+    if ((realWebrootDirectory == NULL || realPath == NULL) ||
+    // Pfad befindet sich ausserhalb des Webroot-Verzeichnisses (z.B. durch "..")
+        strncmp(realWebrootDirectory, realPath, strlen(realWebrootDirectory)) != 0) {
         response->statusCode = HTTP_STATUS_NOT_FOUND;
 
-        if (realWebfileDirectory) free(realWebfileDirectory);
+        if (realWebrootDirectory) free(realWebrootDirectory);
         if (realPath) free(realPath);
         return false;
     }
@@ -279,7 +278,7 @@ bool httpResponseCheckFilePath (HttpResponse *response, String *path)
         // korrekt vom Browser aufgelöst werden können.
         if (stringIsEmpty(path) || path->cStr[stringLength(path)-1] != '/') {
             String *location = stringCreate("Location: ");
-            stringAppend(location, realPath + strlen(realWebfileDirectory));
+            stringAppend(location, realPath + strlen(realWebrootDirectory));
             stringAppend(location, "/");
 
             response->statusCode = HTTP_STATUS_MOVED_PERMANENTLY;
@@ -287,7 +286,7 @@ bool httpResponseCheckFilePath (HttpResponse *response, String *path)
 
             stringFree(location);
 
-            free(realWebfileDirectory);
+            free(realWebrootDirectory);
             free(realPath);
             return false;
         }
@@ -296,7 +295,7 @@ bool httpResponseCheckFilePath (HttpResponse *response, String *path)
         stringAppend(path, WEB_INDEX_FILE);
     }
 
-    free(realWebfileDirectory);
+    free(realWebrootDirectory);
     free(realPath);
     return true;
 }

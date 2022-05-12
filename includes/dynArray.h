@@ -19,8 +19,7 @@ typedef struct {
 
 Array* arrayCreate ();
 Array* arrayCreateWithCapacity (size_t capacity);
-Array* arrayCreateWithArray (size_t size, void* cArr[]);
-Array* arrayCreateWithArguments (size_t size, ...);
+Array* arrayCreateWithCArray (size_t size, void* cArr[]);
 void arrayFree (Array *arr);
 void arrayReserve (Array *arr, size_t capacity);
 void arrayShrinkToFit (Array* arr);

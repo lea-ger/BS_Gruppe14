@@ -1,8 +1,16 @@
-#include <wait.h>
 #include "newsletter.h"
 
 
-// FIXME PLAYGROUND-STATUS!!!
+/*
+ * Newsletter für Datenbankeinträge
+ *
+ * Pub/Sub System mit einem Observer Prozess pro Subscriber
+ * der die Benachrichtigungen aus einer Message Queue liest und
+ * ggf. über den Socket an den Client weiterleitet. Benutzt eigene Ids
+ * die als Bit-Maske gespeichert sind, um die Datenmenge gering zu halten,
+ * trotz fehlender Dynamik auf dem Shared Memory Segment.
+ *
+ */
 
 
 static int observerPid = 0;
@@ -65,11 +73,14 @@ void eventCommandSubscribe (Command *cmd)
 
 
 /**
+ * Schickt eine Nachricht durch die Message Queue an jeden Observer Prozess
+ * dessen zugehörige Subscriber Id einen Eintrag in den Subscriptions hat,
+ * der mit dem Index eines Storage Eintrags identisch ist.
  *
- * @param notificationId
- * @param recordIndex
- * @param key
- * @param value
+ * @param notificationId - Nachricht
+ * @param recordIndex - Betreffender Eintrag
+ * @param key - Eintrags-Schlüssel
+ * @param value - Eintrags-Wert
  */
 void notifyAllObservers (int notificationId, int recordIndex, const char* key, const char* value)
 {
@@ -106,13 +117,21 @@ void notifyAllObservers (int notificationId, int recordIndex, const char* key, c
 }
 
 
+/**
+ * Registriert sich für Benachrichtigungen bei Änderung eines Eintrags.
+ * Wenn es die erste Subscription ist, wird ausserdem eine Subscriber-Id
+ * reserviert und der Observer Prozess gestartet.
+ *
+ * @param key Eintrags-Schlüssel
+ */
 int subscribeStorageRecord (const char* key)
 {
-    //enterCriticalSection(READ_ACCESS);
+    enterCriticalSection(WRITE_ACCESS);
+
     int recordIndex = findStorageRecord(key);
     if (recordIndex == -1) return 3; // key_nonexistent
 
-    if (subscriberId == 0 && !takeSubscriberId()) {
+    if (subscriberId == 0 && !startStorageObserver()) {
         return 2; // subscribers_full
     }
     if (subscriberId & subscribers[recordIndex]) {
@@ -126,13 +145,13 @@ int subscribeStorageRecord (const char* key)
         perror("subscribeStorageRecord msgsnd");
     }
 
-    //leaveCriticalSection(READ_ACCESS);
+    leaveCriticalSection(WRITE_ACCESS);
 
     return 0; // subscribed
 }
 
 
-bool takeSubscriberId ()
+bool startStorageObserver ()
 {
     // Wahr wenn alle Bits auf 1 stehen / keine Id mehr frei ist
     if (!~*subscriberRegistry) {
@@ -140,20 +159,30 @@ bool takeSubscriberId ()
     }
     // Setzte subscriberId auf das erste freie Bit in subscriberRegistry
     for (subscriberId = 1; subscriberId & *subscriberRegistry; subscriberId <<= 1);
-    // Trägt das subscriberId-Bit in subscriberRegistry ein
+    // Trägt das nun in Verwendung befindliche Subscriber-Id Bit in subscriberRegistry ein
     *subscriberRegistry |= subscriberId;
 
-    signal(SIGCHLD, cleanupStorageObserver);
+    signal(SIGCHLD, sigChldNoSubscriptions);
     observerPid = fork();
+
     if (observerPid == 0) {
         prctl(PR_SET_NAME, (unsigned long)"kvsvr(sub)");
         prctl(PR_SET_PDEATHSIG, SIGTERM);
-        signal(SIGTERM, releaseSubscriberId);
+        signal(SIGTERM, sigTermCleanupSubscriptions);
         runStorageObserver();
 
         exit(EXIT_SUCCESS);
     }
     return true;
+}
+
+
+void sigChldNoSubscriptions ()
+{
+    if (waitpid(observerPid, NULL, 0) > 0) {
+        observerPid = 0;
+        subscriberId = 0;
+    }
 }
 
 
@@ -213,11 +242,14 @@ void runStorageObserver ()
 }
 
 
-void releaseSubscriberId ()
+void sigTermCleanupSubscriptions ()
 {
+    enterCriticalSection(WRITE_ACCESS);
+
     // Wahr, wenn die Subscriber-Id nicht registriert ist
     if (!(*subscriberRegistry & subscriberId)) return;
 
+    // Gibt die Subscriber-Id wieder frei
     *subscriberRegistry &= ~subscriberId;
 
     if (subscriptionCounter > 0) {
@@ -227,18 +259,11 @@ void releaseSubscriberId ()
         }
     }
 
+    leaveCriticalSection(WRITE_ACCESS);
+
     // Entferne mögliche nicht abgeholte Nachrichten aus der Warteschlange
     MsqBuffer msgBuffer;
     while (msgrcv(msqNotifierId, &msgBuffer, sizeof(MsqBuffer),
                   subscriberId, IPC_NOWAIT) > 0);
-}
-
-
-void cleanupStorageObserver ()
-{
-    if (waitpid(observerPid, NULL, 0) > 0) {
-        observerPid = 0;
-        subscriberId = 0;
-    }
 }
 

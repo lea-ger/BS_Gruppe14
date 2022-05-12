@@ -7,6 +7,7 @@
 #include "network.h"
 
 #include <sys/msg.h>
+#include <wait.h>
 #include <errno.h>
 
 
@@ -39,11 +40,11 @@ void freeModuleNewsletter ();
 void notifyAllObservers (int notificationId, int recordIndex, const char* key, const char* value);
 
 int subscribeStorageRecord (const char* key);
-bool takeSubscriberId ();
+bool startStorageObserver ();
+void sigChldNoSubscriptions ();
 
 void runStorageObserver ();
-void releaseSubscriberId ();
-void cleanupStorageObserver ();
+void sigTermCleanupSubscriptions ();
 
 
 #endif //SERVER_NEWSLETTER_H

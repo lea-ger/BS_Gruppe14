@@ -1,8 +1,7 @@
 #ifndef COMMAND_H
 #define COMMAND_H
 
-#include "dynString.h"
-#include "dynArray.h"
+#include "utils.h"
 
 #include <assert.h>
 
