@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 
-#define PIPE_BUFFER_SIZE STORAGE_VALUE_SIZE
+#define PIPE_BUFFER_SIZE PAGE_SIZE
 
 
 void eventCommandOperation (Command *cmd);

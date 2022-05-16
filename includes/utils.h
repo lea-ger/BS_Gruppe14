@@ -1,8 +1,10 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include "shmalloc.h"
 #include "dynString.h"
 #include "dynArray.h"
+#include "dynHashmap.h"
 
 #include <stdbool.h>
 #include <unistd.h>

@@ -11,10 +11,7 @@
  */
 
 
-static int shmStorageSegmentId = 0;
-
-static Record *storage = NULL;
-static int *storageEndIndex = NULL;
+static Hashmap *storage = NULL;
 
 const static char* keyDeletedMsg = "key_deleted";
 
@@ -25,20 +22,19 @@ void initModuleStorage (int snapshotInterval)
     registerCommandEntry("PUT", 2, false, eventCommandPut);
     registerCommandEntry("DEL", 1, true, eventCommandDel);
 
-    int storageSegmentSize = sizeof(Record) * STORAGE_ENTRY_SIZE + sizeof(int);
+    size_t initialStorageEntries = STORAGE_MIN_ENTRIES;
+    size_t initialStorageSize = STORAGE_MIN_SIZE;
 
-    // Erzeugt ein neues Shared-Memory-Segment
-    shmStorageSegmentId = shmget(IPC_PRIVATE, storageSegmentSize, IPC_CREAT | SHM_R | SHM_W);
-    if (shmStorageSegmentId == -1) {
-        fatalError("initModuleStorage shmget");
+    if (determineFileStorageSize(&initialStorageEntries, &initialStorageSize)) {
+        initialStorageEntries *= 2;
+        initialStorageSize *= 4;
+        if (initialStorageEntries < STORAGE_MIN_ENTRIES) initialStorageEntries = STORAGE_MIN_ENTRIES;
+        if (initialStorageSize < STORAGE_MIN_SIZE) initialStorageSize = STORAGE_MIN_SIZE;
     }
-    printf("Storage shared memory segment created (Id %d).\n", shmStorageSegmentId);
 
-    // Hängt das Shared-Memory-Segment in den lokalen Adressenraum ein
-    // (Das Einhängen wird beim Erzeugen von Kind-Prozessen vererbt)
-    storage = shmat(shmStorageSegmentId, NULL, 0);
-    storageEndIndex = (int*)&storage[STORAGE_ENTRY_SIZE];
-    memset(storage, 0, storageSegmentSize);
+    shminit(initialStorageSize);
+
+    storage = hashmapCreateWithCapacityShm(initialStorageEntries);
 
     if (loadStorageFromFile()) {
         printf("Storage data was loaded from file.\n");
@@ -60,11 +56,7 @@ void freeModuleStorage ()
         printf("Storage data saved to file.\n");
     }
 
-    // Hängt das Shared-Memory-Segment aus dem lokalen Adressenraum aus
-    shmdt(storage);
-    // Löscht das Shared-Memory-Segment
-    shmctl(shmStorageSegmentId, IPC_RMID, NULL);
-    printf("Storage shared memory segment deleted (Id %d).\n", shmStorageSegmentId);
+    shmcleanup();
 }
 
 
@@ -122,30 +114,6 @@ void eventCommandDel (Command *cmd)
 
 
 /**
- * Findet den Index eines Schlüssels im Storage, bei Fehlschlag -1.
- * Nicht gegen Race-Conditions gesichert.
- * NICHT AUSSERHALB EINES KRITISCHEN ABSCHNITTS AUFRUFEN!!!
- *
- * @param key - Suchschlüssel
- * @param accessTyp - Zugriffsart des Aufrufers
- * @return - Index des gefundenen Eintrags
- */
-int findStorageRecord (const char* key)
-{
-    for (int i = 0; i < *storageEndIndex; i++) {
-        if (strcmp(storage[i].key, key) == 0) {
-            return i;
-        }
-        // Race-Conditions durch Trennung der Index-Iteration von der eigentlichen Operation.
-        // Schlechte Idee.
-        //leaveCriticalSection(accessType);
-        //enterCriticalSection(accessType);
-    }
-    return -1;
-}
-
-
-/**
  * Sucht einen Schlüssel im Storage und kopiert dessen Wert nach "value".
  *
  * @param key - Suchschlüssel
@@ -155,9 +123,9 @@ bool getStorageRecord (const char* key, String* value)
 {
     enterCriticalSection(READ_ACCESS);
 
-    int index = findStorageRecord(key);
-    if (index != -1) {
-        stringCopy(value, storage[index].value);
+    char *recordValue = hashmapGetValue(shmres(storage), key);
+    if (recordValue != NULL) {
+        stringCopy(value, recordValue);
 
         leaveCriticalSection(READ_ACCESS);
         return true;
@@ -181,32 +149,19 @@ int putStorageRecord (const char* key, const char* value)
 {
     enterCriticalSection(WRITE_ACCESS);
 
-    // Sucht nach existierenden Einträgen
-    int index = findStorageRecord(key);
-    if (index != -1) {
-        notifyAllObservers(NL_NOTIFICATION_PUT, index, key, value);
+    char *recordValue = shmalloc(strlen(value) + 1);
+    strcpy(shmres(recordValue), value);
+    char* removedValue = hashmapPutItem(shmres(storage), key, recordValue);
 
-        strncpy(storage[index].value, value, STORAGE_VALUE_SIZE);
-
+    if (removedValue != NULL) {
+        //notifyAllObservers(NL_NOTIFICATION_PUT, key, value);
+        shmfree(removedValue);
         leaveCriticalSection(WRITE_ACCESS);
         return 1; // RECORD_OVERWRITTEN
     }
 
-    // Sucht nach dem ersten freien Platz oder einem Platz am Ende
-    index = findStorageRecord("");
-    if (index == -1 && *storageEndIndex < STORAGE_ENTRY_SIZE) {
-        index = (*storageEndIndex)++;
-    }
-    if (index != -1) {
-        strncpy(storage[index].key, key, STORAGE_KEY_SIZE);
-        strncpy(storage[index].value, value, STORAGE_VALUE_SIZE);
-
-        leaveCriticalSection(WRITE_ACCESS);
-        return 2; // RECORD_NEW
-    }
-
     leaveCriticalSection(WRITE_ACCESS);
-    return 0; // STORAGE_FULL
+    return 2; // RECORD_NEW
 }
 
 
@@ -220,12 +175,10 @@ bool deleteStorageRecord (const char* key)
 {
     enterCriticalSection(WRITE_ACCESS);
 
-    int index = findStorageRecord(key);
-    if (index != -1) {
-        notifyAllObservers(NL_NOTIFICATION_DEL, index, storage[index].key, keyDeletedMsg);
-
-        *storage[index].key = '\0';
-
+    char *recordValue = hashmapRemoveItem(shmres(storage), key);
+    if (recordValue != NULL) {
+        //notifyAllObservers(NL_NOTIFICATION_DEL, key, keyDeletedMsg);
+        shmfree(recordValue);
         leaveCriticalSection(WRITE_ACCESS);
         return true;
     }
@@ -246,10 +199,10 @@ void getMultipleStorageRecords (const char* wildcardKey, Array* result)
 {
     enterCriticalSection(READ_ACCESS);
 
-    for (int i = 0; i < *storageEndIndex; i++) {
-        if (*storage[i].key != '\0' &&
-                strMatchWildcard(storage[i].key, wildcardKey)) {
-            responseRecordsAdd(result, storage[i].key, storage[i].value);
+    for (HashmapItem *record = NULL; (record = hashmapNextItem(shmres(storage), record)) != NULL;) {
+        if (strMatchWildcard(record->key, wildcardKey)) {
+            char *recordValue = shmres(record->value);
+            responseRecordsAdd(result, record->key, recordValue);
         }
     }
 
@@ -269,14 +222,11 @@ void deleteMultipleStorageRecords (const char* wildcardKey, Array* result)
 {
     enterCriticalSection(WRITE_ACCESS);
 
-    for (int i = 0; i < *storageEndIndex; i++) {
-        if (*storage[i].key != '\0' &&
-                 strMatchWildcard(storage[i].key, wildcardKey)) {
-            responseRecordsAdd(result, storage[i].key, keyDeletedMsg);
-
-            notifyAllObservers(NL_NOTIFICATION_DEL, i, storage[i].key, keyDeletedMsg);
-
-            strcpy(storage[i].key, "");
+    for (HashmapItem *record = NULL; (record = hashmapNextItem(shmres(storage), record)) != NULL;) {
+        if (strMatchWildcard(record->key, wildcardKey)) {
+            //notifyAllObservers(NL_NOTIFICATION_DEL, record->key, keyDeletedMsg);
+            shmfree(shmres(record->value));
+            responseRecordsAdd(result, record->key, keyDeletedMsg);
         }
     }
 
@@ -304,10 +254,12 @@ bool loadStorageFromFile ()
 
         if (key == NULL || value == NULL) continue;
 
-        strncpy(storage[*storageEndIndex].key, key, STORAGE_KEY_SIZE);
-        strncpy(storage[*storageEndIndex].value, value, STORAGE_VALUE_SIZE);
+        char *recordValue = shmalloc(strlen(value) + 1);
+        strcpy(shmres(recordValue), value);
 
-        (*storageEndIndex)++;
+        if (hashmapAddItem(shmres(storage), key, recordValue) != NULL) {
+            shmfree(shmres(recordValue));
+        }
     }
 
     fclose(file);
@@ -327,14 +279,36 @@ bool saveStorageToFile ()
         return false;
     }
 
-    for (int i = 0; i < *storageEndIndex; i++) {
-        if (*storage[i].key != '\0') {
-            fprintf(file, "%s,%s\n", storage[i].key, storage[i].value);
-        }
+    for (HashmapItem *record = NULL; (record = hashmapNextItem(shmres(storage), record)) != NULL;) {
+        char *recordValue = shmres(record->value);
+        fprintf(file, "%s,%s\n", record->key, recordValue);
     }
 
     fclose(file);
     return true;
+}
+
+
+bool determineFileStorageSize (size_t *records, size_t *dataSize)
+{
+    static char lineBuffer[FILE_BUFFER_SIZE];
+    *records = 0;
+    *dataSize = 0;
+
+    // Bestimme die Anzahl der Einträge und Datenmenge der Datei
+    FILE *file = fopen(STORAGE_FILE, "r");
+    if (file != NULL) {
+        while (fgets(lineBuffer, sizeof(char)*FILE_BUFFER_SIZE, file)) {
+            (*records)++;
+        }
+        fseek(file, 0, SEEK_END);
+        *dataSize = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        fclose(file);
+        return true;
+    }
+    return false;
 }
 
 

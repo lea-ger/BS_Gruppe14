@@ -4,9 +4,8 @@
 
 #define FILE_BUFFER_SIZE PAGE_SIZE
 
-#define STORAGE_KEY_SIZE 64
-#define STORAGE_VALUE_SIZE 256
-#define STORAGE_ENTRY_SIZE 1024
+#define STORAGE_MIN_ENTRIES 1000
+#define STORAGE_MIN_SIZE 50000
 
 #define STORAGE_FILE "../data.csv"
 
@@ -14,16 +13,10 @@
 #include "utils.h"
 #include "command.h"
 #include "lock.h"
-#include "newsletter.h"
+//#include "newsletter.h"
 
 #include <stdio.h>
 #include <sys/shm.h>
-
-
-typedef struct {
-    char key[STORAGE_KEY_SIZE];
-    char value[STORAGE_VALUE_SIZE];
-} Record;
 
 
 void eventCommandGet (Command *cmd);
@@ -33,7 +26,6 @@ void eventCommandDel (Command *cmd);
 void initModuleStorage (int snapshotInterval);
 void freeModuleStorage ();
 
-int findStorageRecord (const char* key);
 
 bool getStorageRecord (const char* key, String* value);
 int putStorageRecord (const char* key, const char* value);
@@ -44,6 +36,7 @@ void deleteMultipleStorageRecords (const char* wildcardKey, Array* result);
 
 bool loadStorageFromFile ();
 bool saveStorageToFile ();
+bool determineFileStorageSize (size_t *records, size_t *dataSize);
 
 void runSnapshotTimer (int interval);
 

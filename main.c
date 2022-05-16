@@ -2,7 +2,7 @@
 #include "command.h"
 #include "lock.h"
 #include "storage.h"
-#include "newsletter.h"
+//#include "newsletter.h"
 #include "systemExec.h"
 #include "network.h"
 
@@ -18,7 +18,7 @@ static void initAllModules ()
     initModuleCommand();
     initModuleLock();
     initModuleStorage(argSnapshotInterval);
-    if (argNewsletter) initModuleNewsletter();
+    //if (argNewsletter) initModuleNewsletter();
     if (argSystemExec) initModuleSystemExec();
     initModuleNetwork(argHttpInterface);
 }
@@ -28,7 +28,7 @@ static void freeAllModules ()
 {
     freeModuleNetwork();
     if (argSystemExec) freeModuleSystemExec();
-    if (argNewsletter) freeModuleNewsletter();
+    //if (argNewsletter) freeModuleNewsletter();
     freeModuleStorage();
     freeModuleLock();
     freeModuleCommand();

@@ -11,6 +11,55 @@
  */
 
 
+static inline const Allocator* stringAllocator (const String *str)
+{
+    return &allocator[str->capacity & 1];
+}
+static inline size_t stringCapacity (const String *str)
+{
+    return (str->capacity & ~1UL) - 1;
+}
+
+
+String* _stringCreateWithCapacity (const char *value, size_t capacity, bool shared)
+{
+    const Allocator *alloc = &allocator[shared];
+    capacity = alignSize(capacity, 8);
+
+    String *str = alloc->reserve(sizeof(String));
+    String *strPtr = alloc->resolve(str);
+    strPtr->cStr = alloc->reserve(capacity * sizeof(char));
+    char *cStr = alloc->resolve(strPtr->cStr);
+
+    strncpy(cStr, value, capacity-1);
+    cStr[capacity-1] = '\0';
+    strPtr->capacity = capacity | shared;
+
+    strPtr->length = strlen(value);
+
+    return str;
+}
+
+
+String* _stringCreateWithFormat (bool shared, const char *format, va_list vaList)
+{
+    va_list vaList2;
+    va_copy(vaList2, vaList);
+
+    int capacity = vsnprintf(NULL, 0, format, vaList);
+    if (capacity < INITIAL_STRING_CAPACITY) {
+        capacity = INITIAL_STRING_CAPACITY;
+    }
+
+    String *str = _stringCreateWithCapacity("", capacity, false);
+    String *strPtr = allocator[shared].resolve(str);
+
+    vsnprintf(stringC(strPtr), stringCapacity(str)+1, format, vaList2);
+
+    return str;
+}
+
+
 /**
  * Erzeugt einen neuen String auf dem Heap-Speicher und legt
  * die anfängliche Zeichenkapazität fest. Der Initialisierungswert
@@ -21,17 +70,13 @@
  */
 String* stringCreateWithCapacity (const char *value, size_t capacity)
 {
-    String *str = malloc(sizeof(String));
+    return _stringCreateWithCapacity(value, capacity, false);
+}
 
-    str->cStr = malloc((capacity+1) * sizeof(char));
-    str->cStr[capacity] = '\0';
-    str->capacity = capacity;
 
-    strncpy(str->cStr, value, capacity+1);
-
-    str->length = strlen(value);
-
-    return str;
+String* stringCreateWithCapacityShm (const char *value, size_t capacity)
+{
+    return _stringCreateWithCapacity(value, capacity, true);
 }
 
 
@@ -46,7 +91,17 @@ String* stringCreate (const char *value)
     if (capacity < INITIAL_STRING_CAPACITY) {
         capacity = INITIAL_STRING_CAPACITY;
     }
-    return stringCreateWithCapacity(value, capacity);
+    return _stringCreateWithCapacity(value, capacity, false);
+}
+
+
+String* stringCreateShm (const char *value)
+{
+    size_t capacity = strlen(value);
+    if (capacity < INITIAL_STRING_CAPACITY) {
+        capacity = INITIAL_STRING_CAPACITY;
+    }
+    return _stringCreateWithCapacity(value, capacity, true);
 }
 
 
@@ -62,21 +117,18 @@ String* stringCreateWithFormat (const char *format, ...)
     va_list vaList;
 
     va_start(vaList, format);
-    int capacity = vsnprintf(NULL, 0, format, vaList);
+    return _stringCreateWithFormat(false, format, vaList);
     va_end(vaList);
-    if (capacity < INITIAL_STRING_CAPACITY) {
-        capacity = INITIAL_STRING_CAPACITY;
-    }
+}
 
-    String *str = stringCreateWithCapacity("", capacity);
+
+String* stringCreateWithFormatShm (const char *format, ...)
+{
+    va_list vaList;
 
     va_start(vaList, format);
-    vsnprintf(str->cStr, capacity+1, format, vaList);
+    return _stringCreateWithFormat(true, format, vaList);
     va_end(vaList);
-
-    str->length = capacity;
-
-    return str;
 }
 
 
@@ -87,10 +139,10 @@ String* stringCreateWithFormat (const char *format, ...)
  */
 void stringFree (String *str)
 {
-    if (str == NULL) return;
+    const Allocator *alloc = stringAllocator(str);
 
-    free(str->cStr);
-    free(str);
+    alloc->release(stringC(str));
+    alloc->release(str);
 }
 
 
@@ -103,12 +155,16 @@ void stringFree (String *str)
  */
 void stringReserve (String *str, size_t capacity)
 {
-    if (capacity == str->capacity) return;
+    capacity = alignSize(capacity + 1, 8);
+    if (capacity == (str->capacity & ~1UL)) return;
 
-    str->cStr = realloc(str->cStr, (capacity+1) * sizeof(char));
-    str->cStr[capacity] = '\0';
-    str->capacity = capacity;
-    if (capacity < str->length) str->length = capacity;
+    const Allocator *alloc = stringAllocator(str);
+
+    str->cStr = alloc->resize(stringC(str), capacity * sizeof(char));
+    stringC(str)[capacity - 1] = '\0';
+    str->capacity = capacity | (str->capacity & 1);
+
+    if (stringCapacity(str) < str->length) str->length = stringCapacity(str);
 }
 
 
@@ -120,19 +176,25 @@ void stringReserve (String *str, size_t capacity)
  */
 void stringShrinkToFit (String *str)
 {
-    stringReserve(str, strlen(str->cStr));
+    stringReserve(str, strlen(stringC(str)));
 }
 
 
 void stringAdjustCapacity (String *str, size_t newStrLen)
 {
-    if (newStrLen > str->capacity) {
-        size_t newCapacity = str->capacity * 2;
+    if (newStrLen > stringCapacity(str)) {
+        size_t newCapacity = stringCapacity(str) * 2;
         if (newStrLen > newCapacity) {
             newCapacity = newStrLen;
         }
         stringReserve(str, newCapacity);
     }
+}
+
+
+inline char* stringC (String *str)
+{
+    return stringAllocator(str)->resolve(str->cStr);
 }
 
 
@@ -150,11 +212,13 @@ void stringAdjustCapacity (String *str, size_t newStrLen)
  */
 size_t stringLength (String *str)
 {
-    if (str->capacity < str->length) {
-        str->cStr[str->capacity] = '\0';
-        str->length = strlen(str->cStr);
-    } else if (str->cStr[str->length] != '\0') {
-        str->length = strlen(str->cStr);
+    char *cStr = stringC(str);
+
+    if (stringCapacity(str) < str->length) {
+        cStr[stringCapacity(str)] = '\0';
+        str->length = strlen(cStr);
+    } else if (cStr[str->length] != '\0') {
+        str->length = strlen(cStr);
     }
 
     return str->length;
@@ -166,9 +230,9 @@ size_t stringLength (String *str)
  *
  * @param str - Zielobjekt
  */
-bool stringIsEmpty (const String* str)
+bool stringIsEmpty (String* str)
 {
-    return str->cStr[0] == '\0';
+    return stringC(str)[0] == '\0';
 }
 
 
@@ -178,9 +242,9 @@ bool stringIsEmpty (const String* str)
  * @param str - Zielobjekt
  * @param value - Vergleich-String
  */
-bool stringEquals (const String *str, const char* value)
+bool stringEquals (String *str, const char* value)
 {
-    return strcmp(str->cStr, value) == 0;
+    return strcmp(stringC(str), value) == 0;
 }
 
 
@@ -195,7 +259,7 @@ String* stringCopy (String *str, const char *value)
     size_t newStrLen = strlen(value);
     stringAdjustCapacity(str, newStrLen);
 
-    strcpy(str->cStr, value);
+    strcpy(stringC(str), value);
 
     str->length = newStrLen;
 
@@ -218,7 +282,7 @@ String* stringAppend (String *str, const char *value)
     stringAdjustCapacity(str, newStrLen);
 
     //strcat(str->cStr, value);
-    strncpy(&str->cStr[strLen], value, attLen+1);
+    strncpy(&stringC(str)[strLen], value, attLen+1);
 
     str->length = newStrLen;
 
@@ -245,7 +309,7 @@ String* stringCopyFormat (String *str, const char *format, ...)
     stringAdjustCapacity(str, newStrLen);
 
     va_start(vaList, format);
-    vsnprintf(str->cStr, newStrLen+1, format, vaList);
+    vsnprintf(stringC(str), newStrLen+1, format, vaList);
     va_end(vaList);
 
     str->length = newStrLen;
@@ -277,7 +341,7 @@ String* stringAppendFormat (String *str, const char *format, ...)
     stringAdjustCapacity(str, newStrLen);
 
     va_start(vaList, format);
-    vsnprintf(&str->cStr[strLen], attLen+1, format, vaList);
+    vsnprintf(&stringC(str)[strLen], attLen+1, format, vaList);
     va_end(vaList);
 
     str->length = newStrLen;
@@ -293,7 +357,7 @@ String* stringAppendFormat (String *str, const char *format, ...)
  */
 String* stringToUpper (String *str)
 {
-    strToUpper(str->cStr);
+    strToUpper(stringC(str));
     return str;
 }
 
@@ -305,7 +369,7 @@ String* stringToUpper (String *str)
  */
 String* stringToLower (String *str)
 {
-    strToLower(str->cStr);
+    strToLower(stringC(str));
     return str;
 }
 
@@ -323,7 +387,7 @@ String* stringToLower (String *str)
  */
 String* stringCut (String *str, size_t start, size_t end)
 {
-    strCut(str->cStr, start, end);
+    strCut(stringC(str), start, end);
 
     str->length = end - start;
 
@@ -339,7 +403,7 @@ String* stringCut (String *str, size_t start, size_t end)
  */
 String* stringTrimSpaces (String *str)
 {
-    strTrimSpaces(str->cStr);
+    strTrimSpaces(stringC(str));
     return str;
 }
 
@@ -352,9 +416,9 @@ String* stringTrimSpaces (String *str)
  * @param match - Vergleichszeichen
  * @param charGroup - Zeichen-Gruppe
  */
-bool stringMatchAllChar (const String *str, const char *match, int charGroup)
+bool stringMatchAllChar (String *str, const char *match, int charGroup)
 {
-    return strMatchAllChar(str->cStr, match, charGroup);
+    return strMatchAllChar(stringC(str), match, charGroup);
 }
 
 
@@ -367,9 +431,9 @@ bool stringMatchAllChar (const String *str, const char *match, int charGroup)
  * @param match - Vergleichszeichen
  * @param charGroup - Zeichen-Gruppe
  */
-int stringMatchAnyChar (const String *str, const char *match, int charGroup)
+int stringMatchAnyChar (String *str, const char *match, int charGroup)
 {
-    return strMatchAnyChar(str->cStr, match, charGroup);
+    return strMatchAnyChar(stringC(str), match, charGroup);
 }
 
 
@@ -381,9 +445,9 @@ int stringMatchAnyChar (const String *str, const char *match, int charGroup)
  * @param str - Zielobjekt
  * @param wildcard - Wildcard
  */
-bool stringMatchWildcard (const String* str, const char *wildcard)
+bool stringMatchWildcard (String* str, const char *wildcard)
 {
-    return strMatchWildcard(str->cStr, wildcard);
+    return strMatchWildcard(stringC(str), wildcard);
 }
 
 

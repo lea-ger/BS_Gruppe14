@@ -1,6 +1,8 @@
 #ifndef DYNSTRING_H
 #define DYNSTRING_H
 
+#include "shmalloc.h"
+
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
@@ -9,7 +11,7 @@
 #include <stdbool.h>
 
 
-#define INITIAL_STRING_CAPACITY 15
+#define INITIAL_STRING_CAPACITY 16
 
 #define STR_MATCH_NOGROUP 0
 #define STR_MATCH_LOWER 1
@@ -29,13 +31,19 @@ typedef struct {
 String* stringCreate (const char* value);
 String* stringCreateWithFormat (const char* format, ...);
 String* stringCreateWithCapacity (const char* value, size_t capacity);
+
+String* stringCreateShm (const char* value);
+String* stringCreateWithFormatShm (const char* format, ...);
+String* stringCreateWithCapacityShm (const char* value, size_t capacity);
+
 void stringFree (String* str);
 void stringReserve (String* str, size_t capacity);
 void stringShrinkToFit (String* str);
 
+char* stringC (String *str);
 size_t stringLength (String* str);
-bool stringIsEmpty (const String* str);
-bool stringEquals (const String* str, const char* value);
+bool stringIsEmpty (String* str);
+bool stringEquals (String* str, const char* value);
 
 String* stringCopy (String* str, const char* value);
 String* stringAppend (String* str, const char* value);
@@ -47,9 +55,9 @@ String* stringToLower (String* str);
 String* stringCut (String* str, size_t start, size_t end);
 String* stringTrimSpaces (String* str);
 
-bool stringMatchAllChar (const String* str, const char *match, int charGroup);
-int stringMatchAnyChar (const String* str, const char *match, int charGroup);
-bool stringMatchWildcard (const String* str, const char *wildcard);
+bool stringMatchAllChar (String* str, const char *match, int charGroup);
+int stringMatchAnyChar (String* str, const char *match, int charGroup);
+bool stringMatchWildcard (String* str, const char *wildcard);
 
 char* strToUpper (char *str);
 char* strToLower (char *str);
