@@ -5,7 +5,7 @@
  * Synchronisations-Mechanismus
  *
  * Stellt mithilfe von Semaphoren einen Mechanismus für die Erhaltung der
- * und Datenkonsistenz bei gleichzeitigem Zugriff und einen exklusiven Modus
+ * Datenkonsistenz bei gleichzeitigem Zugriff und einen exklusiven Modus
  * für das Storage bereit.
  *
  */

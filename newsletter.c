@@ -129,12 +129,17 @@ int subscribeStorageRecord (const char* key)
     enterCriticalSection(WRITE_ACCESS);
 
     int recordIndex = findStorageRecord(key);
-    if (recordIndex == -1) return 3; // key_nonexistent
+    if (recordIndex == -1) {
+        leaveCriticalSection(WRITE_ACCESS);
+        return 3; // key_nonexistent
+    }
 
     if (subscriberId == 0 && !startStorageObserver()) {
+        leaveCriticalSection(WRITE_ACCESS);
         return 2; // subscribers_full
     }
     if (subscriberId & subscribers[recordIndex]) {
+        leaveCriticalSection(WRITE_ACCESS);
         return 1; // already_subscribed
     }
 
@@ -146,7 +151,6 @@ int subscribeStorageRecord (const char* key)
     }
 
     leaveCriticalSection(WRITE_ACCESS);
-
     return 0; // subscribed
 }
 
@@ -179,7 +183,7 @@ bool startStorageObserver ()
 
 void sigChldNoSubscriptions ()
 {
-    if (waitpid(observerPid, NULL, 0) > 0) {
+    if (waitpid(observerPid, NULL, WNOHANG) > 0) {
         observerPid = 0;
         subscriberId = 0;
     }

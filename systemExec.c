@@ -99,7 +99,7 @@ bool executeOperation (const char *op, const char* input, String *output)
 
     // Warte auf den exit-Status des Programms
     int status;
-    while (waitpid(execPid, &status, 0) <= 0);
+    waitpid(execPid, &status, 0);
     if (WIFEXITED(status)) {
         return WEXITSTATUS(status) == 0;
     }
