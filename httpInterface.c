@@ -85,13 +85,33 @@ void httpResponseFree (HttpResponse *response)
  */
 void httpRequestParseMessage (HttpRequest *request, String *requestMessage)
 {
-    const char* payload = strstr(requestMessage->cStr, "\r\n\r\n");
+    char* payload = strstr(requestMessage->cStr, "\r\n\r\n");
     const char* method = strtok(requestMessage->cStr, " \t");
     const char* url    = strtok(NULL, " \t");
 
+    if (payload != NULL) {
+        char *attributes = strtok(NULL, "");
+        payload[0] = '\0';
+        strToLower(attributes);
+
+        char *contentLengthAtt = strstr(attributes, "\r\ncontent-length");
+        if (contentLengthAtt != NULL) {
+            contentLengthAtt = strtok(&contentLengthAtt[2], "\r\n");
+            char *contentLength = strrchr(contentLengthAtt, ' ');
+            request->payloadSize = strtol(contentLength, NULL, 10);
+        }
+        else {
+            request->payloadSize = strlen(&payload[4]);
+        }
+        stringCopy(request->payload, &payload[4]);
+    }
+    else {
+        request->payloadSize = 0;
+        stringCopy(request->payload, "");
+    }
+
     stringToUpper(stringCopy(request->method, (method != NULL) ? method : ""));
     stringCopy(request->url, (url != NULL) ? url : "");
-    stringCopy(request->payload, (payload != NULL) ? &payload[4] : "");
 }
 
 

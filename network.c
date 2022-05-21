@@ -215,6 +215,14 @@ void clientHandlerHttp (SOCKET socket) {
     }
     else if (size > 0) {
         httpRequestParseMessage(request, buffer);
+
+        // In dem Fall das der Anhang des HTTP-Headers nicht im selben TCP-Paket ist
+        size_t payloadSize = strlen(request->payload->cStr);
+        if (request->payloadSize > payloadSize) {
+            stringReserve(request->payload, request->payloadSize);
+            recv(socket, &request->payload->cStr[payloadSize], request->payloadSize, 0);
+        }
+
         printf("Http-%d: %s %s %s\n", getpid(),
                request->method->cStr, request->url->cStr, request->payload->cStr);
         httpRequestProcess(request, response);

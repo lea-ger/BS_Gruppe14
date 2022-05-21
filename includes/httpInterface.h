@@ -23,6 +23,7 @@
 typedef struct {
     String *method;
     String *url;
+    size_t payloadSize;
     String *payload;
 } HttpRequest;
 
