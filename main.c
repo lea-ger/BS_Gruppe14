@@ -37,6 +37,7 @@ static void freeAllModules ()
 
 void freeResourcesAndExit ()
 {
+    killpg(getpgrp(), SIGTERM);
     freeAllModules();
     exit(EXIT_SUCCESS);
 }
