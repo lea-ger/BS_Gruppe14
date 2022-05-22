@@ -24,6 +24,7 @@ void initModuleStorage (int snapshotInterval)
     registerCommandEntry("GET", 1, true, eventCommandGet);
     registerCommandEntry("PUT", 2, false, eventCommandPut);
     registerCommandEntry("DEL", 1, true, eventCommandDel);
+    registerCommandEntry("CNT", 1, true, eventCommandCount);
 
     int storageSegmentSize = sizeof(Record) * STORAGE_ENTRY_SIZE + sizeof(int);
 
@@ -118,6 +119,25 @@ void eventCommandDel (Command *cmd)
     if (cmd->responseRecords->size == 0) {
         stringCopy(cmd->responseMessage,  "key_nonexistent");
     }
+}
+
+
+void eventCommandCount (Command *cmd)
+{
+    int counter = 0;
+
+    enterCriticalSection(READ_ACCESS);
+    for (int i = 0; i < *storageEndIndex; i++) {
+        if (*storage[i].key != '\0' &&
+            strMatchWildcard(storage[i].key, cmd->key->cStr)) {
+            counter++;
+        }
+    }
+    leaveCriticalSection(READ_ACCESS);
+
+    String *strCounter = stringCreateWithFormat("%d", counter);
+    responseRecordsAdd(cmd->responseRecords, cmd->key->cStr, strCounter->cStr);
+    stringFree(strCounter);
 }
 
 

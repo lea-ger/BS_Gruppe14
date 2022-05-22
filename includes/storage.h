@@ -29,6 +29,7 @@ typedef struct {
 void eventCommandGet (Command *cmd);
 void eventCommandPut (Command *cmd);
 void eventCommandDel (Command *cmd);
+void eventCommandCount (Command *cmd);
 
 void initModuleStorage (int snapshotInterval);
 void freeModuleStorage ();
